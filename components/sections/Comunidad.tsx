@@ -47,47 +47,52 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
 
   const fetchPosts = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) setCurrentUserId(user.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setCurrentUserId(user.id);
 
-    let query = supabase
-      .from("posts")
-      .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, content, profiles(username, full_name, avatar_url))")
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (activeTab === 'oratorio') {
-      query = query.eq('is_anonymous', true);
-    } else {
-      query = query.neq('is_anonymous', true);
-    }
-
-    if (communityId) {
-       query = query.eq('community_id', communityId);
-    } else {
-       query = query.is('community_id', null);
-    }
-
-    const { data: fullData, error: fullError } = await query;
-      
-    if (fullError) {
-      console.warn("Nuevas tablas no detectadas, usando fallback clásico:", fullError); // Fallback ignore community_id
-      let fallbackQuery = supabase
+      let query = supabase
         .from("posts")
-        .select("id, author_id, content, created_at, profiles(username, full_name, avatar_url)")
+        .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, content, profiles(username, full_name, avatar_url))")
         .order("created_at", { ascending: false })
         .limit(20);
-        
-      const { data: fallbackData } = await fallbackQuery;
+
       if (activeTab === 'oratorio') {
-        setPosts([]); 
+        query = query.eq('is_anonymous', true);
       } else {
-        setPosts((fallbackData as unknown as Post[]) ?? []);
+        query = query.neq('is_anonymous', true);
       }
-    } else {
-      setPosts((fullData as unknown as Post[]) ?? []);
+
+      if (communityId) {
+         query = query.eq('community_id', communityId);
+      } else {
+         query = query.is('community_id', null);
+      }
+
+      const { data: fullData, error: fullError } = await query;
+        
+      if (fullError) {
+        console.warn("Nuevas tablas no detectadas, usando fallback clásico:", fullError); // Fallback ignore community_id
+        let fallbackQuery = supabase
+          .from("posts")
+          .select("id, author_id, content, created_at, profiles(username, full_name, avatar_url)")
+          .order("created_at", { ascending: false })
+          .limit(20);
+          
+        const { data: fallbackData } = await fallbackQuery;
+        if (activeTab === 'oratorio') {
+          setPosts([]); 
+        } else {
+          setPosts((fallbackData as unknown as Post[]) ?? []);
+        }
+      } else {
+        setPosts((fullData as unknown as Post[]) ?? []);
+      }
+    } catch (err) {
+      console.error("Error al cargar publicaciones:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handlePostPrayer = async (e: React.FormEvent) => {
