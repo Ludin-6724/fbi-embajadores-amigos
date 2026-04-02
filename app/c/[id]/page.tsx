@@ -2,6 +2,7 @@ import Hero from "@/components/sections/Hero";
 import DashboardActions from "@/components/sections/DashboardActions";
 import Comunidad from "@/components/sections/Comunidad";
 import Rachas from "@/components/sections/Rachas";
+import PendingRequestsBanner from "@/components/sections/PendingRequestsBanner";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
 import { createClient } from "@/lib/supabase/server";
@@ -51,6 +52,17 @@ export default async function CommunityPage({ params }: { params: Promise<{ id: 
 
   const isAdmin = isOwner || ['admin', 'founder'].includes(memberData?.role ?? '');
 
+  // Count pending requests for private communities (admin only)
+  let pendingCount = 0;
+  if (isAdmin && community.is_private) {
+    const { count } = await supabase
+      .from('community_join_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('community_id', id)
+      .eq('status', 'pending');
+    pendingCount = count ?? 0;
+  }
+
   return (
     <>
       <Navbar />
@@ -94,6 +106,12 @@ export default async function CommunityPage({ params }: { params: Promise<{ id: 
       <main className="flex-1 flex flex-col bg-white">
         <Hero profile={profile} community={community} />
         {profile && <DashboardActions profile={profile} isCommunity={true} />}
+
+        {/* Pending requests banner for private communities */}
+        {isAdmin && community.is_private && pendingCount > 0 && (
+          <PendingRequestsBanner communityId={id} initialCount={pendingCount} />
+        )}
+
         <div className="bg-light-gray/20 pt-10">
           <Comunidad communityId={id} />
           <Rachas communityId={id} />

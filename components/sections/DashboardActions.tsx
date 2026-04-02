@@ -102,11 +102,14 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
               Rachas
             </button>
             <button 
-               onClick={() => setActiveModal("community")}
+               onClick={() => {
+                 const el = document.getElementById("comunidades");
+                 if (el) el.scrollIntoView({ behavior: "smooth" });
+               }}
               className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
             >
               <Users size={18} className="text-gold" />
-              Sub-Comunidad
+              Sub-Comunidades
             </button>
           </div>
         </div>
