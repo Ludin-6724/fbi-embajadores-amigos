@@ -131,7 +131,7 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
       return post;
     }));
 
-    // Fire-and-forget: don't block the UI at all
+    // Now persist to DB in the background
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
@@ -142,10 +142,14 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
     });
 
     if (error) {
-      console.warn("Reaction error (probably duplicate):", error.message);
+      // Duplicate or constraint error — the reaction already existed
+      // Do NOT sync here, keep the optimistic state as-is
+      console.warn("Reaction already exists:", error.message);
+      return;
     }
-    // Silent background sync to get the real state
-    syncPostsSilently();
+
+    // Only sync after a successful insert — give DB time to propagate
+    setTimeout(() => syncPostsSilently(), 800);
   };
 
   const syncPostsSilently = async () => {
