@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FBI Embajadores Amigos 🕊️
 
-## Getting Started
+Este es el repositorio oficial de la aplicación web "FBI Embajadores Amigos", desarrollada para el Congreso FBI. El objetivo de la aplicación es inspirar a la juventud a pasar del algoritmo a convertirse en un agente espiritual activo.
 
-First, run the development server:
+El diseño transmite luz, pureza y tecnología moderna mediante un tema claro vibrante, acentos dorados y elementos 3D sutiles.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Arquitectura y Stack 🛠️
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Framework**: Next.js 15 (App Router)
+- **Lenguaje**: TypeScript
+- **Estilizos**: Tailwind CSS v4, customizado con tokens de diseño en `app/globals.css`
+- **Componentes 3D**: Three.js a través de `@react-three/fiber` y `@react-three/drei`
+- **Animaciones**: GSAP y Framer Motion
+- **Iconos**: Lucide React
+- **Base de datos (BaaS)**: Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Requisitos Previos
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Node.js versión 20.x o superior.
+- Una cuenta en Supabase para habilitar las funcionalidades backend reales (si vas a pasar la Fase Mockup).
 
-## Learn More
+## Instalación y Ejecución Local 🚀
 
-To learn more about Next.js, take a look at the following resources:
+1. **Clona y ubícate en la carpeta del repositorio** (o usa esta misma carpeta `fbi-embajadores-amigos` ya generada).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. **Instala las dependencias**
+   ```bash
+   npm install
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. **Configura Supabase**  
+   Crea un archivo `.env.local` en la raíz del proyecto y agrega tus claves de Supabase. De lo contrario, la API utilizará "mock data" automáticamente para visualizar el contenido sin credenciales.
 
-## Deploy on Vercel
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. **Corre el entorno de desarrollo**
+   ```bash
+   npm run dev
+   ```
+   Abre [http://localhost:3000](http://localhost:3000) en tu navegador preferido.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Comandos Útiles
+
+- `npm run dev`: Inicia el entorno de desarrollo.
+- `npm run build`: Genera la versión de producción optimizada.
+- `npm start`: Levanta el servidor local con la versión de producción compilada.
+- `npm run lint`: Encuentra y repara problemas en el código fuente de Next.js.
+
+## Estructura del Proyecto
+
+- `app/` - CÓDIGO CORE. Layout, API y vistas.
+- `components/sections/` - Secciones funcionales de la Landing Page (Hero, Eventos, Comunidad, etc).
+- `components/three/` - Experiencias inmersivas 3D usando WebGL.
+- `components/ui/` - Componentes visuales genéricos como Navbar, Footer y tarjetas.
+- `lib/` - Lógica de backend conectada a Supabase.
+- `types/` - Definiciones de tipado TypeScript para módulos abstractos.
+
+Hecho con luz y propósito para los embajadores del Congreso FBI.
