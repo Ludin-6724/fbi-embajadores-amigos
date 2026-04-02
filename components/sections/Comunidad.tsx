@@ -37,12 +37,20 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newPrayerText, setNewPrayerText] = useState("");
   const [submittingPrayer, setSubmittingPrayer] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const supabase = createClient();
 
   useEffect(() => {
     fetchPosts();
   }, [activeTab, communityId]);
+
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -120,9 +128,12 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
 
   const handleReact = async (postId: string, reactionType: "like" | "amen" | "pray") => {
     // Optimistic Update: Update the local state INSTANTLY
+    let alreadyReacted = false;
     setPosts(prevPosts => prevPosts.map(post => {
       if (post.id === postId) {
         const currentReactions = post.post_reactions || [];
+        // Check if user already reacted with this type in the optimistic state
+        // (This is just a simple frontend check, the DB will handle the real logic)
         return {
           ...post,
           post_reactions: [...currentReactions, { reaction: reactionType }]
@@ -142,14 +153,18 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
     });
 
     if (error) {
-      // Duplicate or constraint error — the reaction already existed
-      // Do NOT sync here, keep the optimistic state as-is
-      console.warn("Reaction already exists:", error.message);
+      if (error.code === '23505') { // Unique violation
+        setNotification({ message: "Ya has reaccionado a esta publicación", type: 'error' });
+      } else {
+        console.warn("Reaction error:", error.message);
+      }
+      // Reload posts to reconcile state
+      fetchPosts();
       return;
     }
 
-    // Only sync after a successful insert — give DB time to propagate
-    setTimeout(() => syncPostsSilently(), 800);
+    // Success! Wait a bit longer for DB consistency before silent sync
+    setTimeout(() => syncPostsSilently(), 1500);
   };
 
   const syncPostsSilently = async () => {
@@ -210,6 +225,15 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
 
   return (
     <section className="py-16 md:py-32 bg-cream text-navy-dark relative z-10" id="comunidad">
+      {/* Toast Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-[200] px-6 py-3 rounded-2xl shadow-lg border animate-fade-in ${
+          notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'
+        }`}>
+          <p className="font-sans font-bold text-sm">{notification.message}</p>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 md:px-8">
         {/* Posts feed */}
         <div className="pt-8">

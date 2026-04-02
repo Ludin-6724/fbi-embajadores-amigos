@@ -19,6 +19,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [myStreak, setMyStreak] = useState<Streak | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Form state
   const [missionNote, setMissionNote] = useState("");
@@ -28,6 +29,13 @@ export default function Rachas({ communityId }: { communityId?: string }) {
   useEffect(() => {
     fetchData();
   }, [communityId]);
+
+  useEffect(() => {
+    if (statusMsg) {
+      const timer = setTimeout(() => setStatusMsg(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [statusMsg]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -104,6 +112,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
     if (!userId || checkingIn || !missionNote.trim()) return;
 
     setCheckingIn(true);
+    setStatusMsg(null);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -118,6 +127,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
       
       if (diffDays === 0) { 
         newDays = myStreak.streak_days; 
+        setStatusMsg({ message: "Ya registraste tu misión de hoy, pero vamos a actualizar tu nota.", type: 'success' });
       } else if (diffDays === 1) {
         newDays = myStreak.streak_days + 1;
       } else {
@@ -134,34 +144,53 @@ export default function Rachas({ communityId }: { communityId?: string }) {
       community_id: communityId || null
     };
 
-    // Postgres 14 upsert logic can be tricky with partial unique indexes on coalesce triggers.
-    // Instead of trusting "UPSERT", since we know myStreak existence, we can UPSERT based on user_id AND community_id condition
-    // For supabase javascript client, `upsert` only works elegantly on Primary Key.
-    // Let's do an explicit Update or Insert to avoid conflict problems:
-    let reqError;
-    if (myStreak) {
-       // Update existing
-       const req = await supabase.from("streaks").update(payload).eq("user_id", userId).is("community_id", communityId || null);
-       reqError = req.error;
-    } else {
-       // Insert new
-       const req = await supabase.from("streaks").insert(payload);
-       reqError = req.error;
-    }
+    // Optimistic UI: assume success to give instant feedback
+    const oldStreak = myStreak;
+    setMyStreak({
+      ...payload,
+      profiles: myStreak?.profiles || null
+    } as any);
 
-    if (!reqError) {
-       await supabase.from("posts").insert({
-         author_id: userId,
-         content: `🔥 Misión completada de ${newDays} ${newDays === 1 ? 'día' : 'días'} consecutivos!\n\n"${missionNote.trim()}"`,
-         is_anonymous: false,
-         community_id: communityId || null
-       });
+    try {
+      let reqError;
+      const { data: existing } = await supabase
+        .from("streaks")
+        .select("id")
+        .eq("user_id", userId)
+        .is("community_id", communityId || null)
+        .maybeSingle();
 
-      await fetchData();
-    } else {
-       console.error("Error upserting streak:", reqError);
+      if (existing) {
+         const { error } = await supabase.from("streaks").update(payload).eq("id", existing.id);
+         reqError = error;
+      } else {
+         const { error } = await supabase.from("streaks").insert(payload);
+         reqError = error;
+      }
+
+      if (!reqError) {
+        setStatusMsg({ message: "¡Misión registrada con éxito! Tu racha ha subido.", type: 'success' });
+        
+        // Post to the wall
+        await supabase.from("posts").insert({
+          author_id: userId,
+          content: `🔥 Misión completada - Día ${newDays}!\n\n"${missionNote.trim()}"`,
+          is_anonymous: false,
+          community_id: communityId || null
+        });
+
+        await fetchData();
+        setMissionNote("");
+      } else {
+        throw reqError;
+      }
+    } catch (err: any) {
+      console.error("Error updating streak:", err);
+      setStatusMsg({ message: `Error: ${err.message || 'No se pudo guardar'}`, type: 'error' });
+      setMyStreak(oldStreak); // Rollback optimistic UI
+    } finally {
+      setCheckingIn(false);
     }
-    setCheckingIn(false);
   };
 
   const hasCheckedInToday = () => {
@@ -252,6 +281,15 @@ export default function Rachas({ communityId }: { communityId?: string }) {
                  <div className="text-center p-6 bg-white rounded-2xl border border-light-gray">
                    <p className="text-sm font-sans text-navy-dark/70">Inicia sesión para registrar tu progreso y ver misiones diarias.</p>
                  </div>
+               )}
+
+               {statusMsg && (
+                <div className={`mt-4 p-4 rounded-xl text-xs font-sans font-bold border animate-fade-in ${
+                  statusMsg.type === 'error' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'
+                }`}>
+                  {statusMsg.type === 'error' ? '⚠️ ' : '✅ '}
+                  {statusMsg.message}
+                </div>
                )}
              </div>
           </div>
