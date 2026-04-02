@@ -114,8 +114,8 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
 
       {/* Modals */}
       {activeModal && (
-        <div className="fixed inset-0 bg-navy-dark/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-gold/20">
+        <div className="fixed inset-0 bg-navy-dark/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+          <div className="bg-white w-[95%] max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-gold/20 my-auto">
             <div className="flex items-center justify-between p-6 border-b border-light-gray bg-cream">
               <h3 className="font-serif text-xl font-bold text-navy-dark">
                 {activeModal === "post" ? "Crear Publicación" : activeModal === "prayer" ? "Petición Anónima" : "Nueva Comunidad"}

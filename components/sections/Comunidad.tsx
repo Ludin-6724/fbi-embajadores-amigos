@@ -124,16 +124,42 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
     setSubmittingReaction(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return setSubmittingReaction(false);
+
+    // Optimistic Update: Update the local state first
+    setPosts(prevPosts => prevPosts.map(post => {
+      if (post.id === postId) {
+        const currentReactions = post.post_reactions || [];
+        return {
+          ...post,
+          post_reactions: [...currentReactions, { reaction: reactionType }]
+        };
+      }
+      return post;
+    }));
     
-    // Si ya reaccionó, la DB lanzará error por constraint de unicidad que es esperado
-    await supabase.from("post_reactions").insert({
+    // Background update: do not wait for this to finish to unlock UI
+    supabase.from("post_reactions").insert({
       post_id: postId,
       user_id: user.id,
       reaction: reactionType
+    }).then(({ error }) => {
+       if (error) {
+         console.warn("Error silent handled:", error.message);
+         // Si hay error (ej: ya reaccionó), el background sync de fetchPosts corregirá el UI luego
+       }
+       setSubmittingReaction(false);
+       // Sync state silently without global loading
+       syncPostsSilently();
     });
-    
-    await fetchPosts();
-    setSubmittingReaction(false);
+  };
+
+  const syncPostsSilently = async () => {
+    const { data: fullData } = await supabase
+      .from("posts")
+      .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, content, profiles(username, full_name, avatar_url))")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (fullData) setPosts((fullData as unknown as Post[]) ?? []);
   };
 
   const submitComment = async (postId: string) => {
@@ -141,14 +167,32 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
+    const newCommentContent = commentText.trim();
+    setCommentText(""); // Limpiar input inmediatamente
+
+    // Optimistic Update: Add comment locally
+    setPosts(prevPosts => prevPosts.map(post => {
+      if (post.id === postId) {
+        const currentComments = post.comments || [];
+        return {
+          ...post,
+          comments: [...currentComments, { 
+            id: 'temp-' + Date.now(), 
+            content: newCommentContent, 
+            profiles: { username: 'Tú', full_name: 'Tú', avatar_url: null }
+          }]
+        };
+      }
+      return post;
+    }));
+
     await supabase.from("comments").insert({
       post_id: postId,
       author_id: user.id,
-      content: commentText.trim()
+      content: newCommentContent
     });
     
-    setCommentText("");
-    await fetchPosts();
+    await syncPostsSilently();
   };
 
   return (
