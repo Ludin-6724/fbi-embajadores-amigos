@@ -1,24 +1,54 @@
 {
   "name": "FBI Embajadores Amigos",
   "short_name": "FBI Amigos",
-  "description": "Compañero digital del taller 'DEL ALGORITMO AL AGENTE'",
-  "start_url": "/",
+  "description": "Compañero digital oficial del taller 'DEL ALGORITMO AL AGENTE'",
+  "start_url": "/?source=pwa",
   "display": "standalone",
   "background_color": "#FFFCF7",
   "theme_color": "#0A1128",
-  "orientation": "portrait-primary",
+  "status_bar": "black-translucent",
+  "orientation": "portrait",
+  "scope": "/",
   "icons": [
     {
       "src": "/logo-fbi.jpg",
       "sizes": "192x192",
       "type": "image/jpeg",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/logo-amigos.jpg",
+      "src": "/logo-fbi.jpg",
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any"
+    },
+    {
+      "src": "/logo-fbi.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Muro de Agentes",
+      "url": "/#comunidad",
+      "icons": [
+        {
+          "src": "/logo-fbi.jpg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Rachas",
+      "url": "/#rachas",
+      "icons": [
+        {
+          "src": "/logo-fbi.jpg",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
