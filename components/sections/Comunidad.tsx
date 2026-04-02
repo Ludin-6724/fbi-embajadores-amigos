@@ -33,7 +33,6 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
   const [loading, setLoading] = useState(true);
   const [activeCommentPost, setActiveCommentPost] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
-  const [submittingReaction, setSubmittingReaction] = useState(false);
   const [activeTab, setActiveTab] = useState<'muro' | 'oratorio'>('muro');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newPrayerText, setNewPrayerText] = useState("");
@@ -120,12 +119,7 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
   };
 
   const handleReact = async (postId: string, reactionType: "like" | "amen" | "pray") => {
-    if (submittingReaction) return;
-    setSubmittingReaction(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return setSubmittingReaction(false);
-
-    // Optimistic Update: Update the local state first
+    // Optimistic Update: Update the local state INSTANTLY
     setPosts(prevPosts => prevPosts.map(post => {
       if (post.id === postId) {
         const currentReactions = post.post_reactions || [];
@@ -136,30 +130,45 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
       }
       return post;
     }));
+
+    // Fire-and-forget: don't block the UI at all
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
     
-    // Background update: do not wait for this to finish to unlock UI
-    supabase.from("post_reactions").insert({
+    const { error } = await supabase.from("post_reactions").insert({
       post_id: postId,
       user_id: user.id,
       reaction: reactionType
-    }).then(({ error }) => {
-       if (error) {
-         console.warn("Error silent handled:", error.message);
-         // Si hay error (ej: ya reaccionó), el background sync de fetchPosts corregirá el UI luego
-       }
-       setSubmittingReaction(false);
-       // Sync state silently without global loading
-       syncPostsSilently();
     });
+
+    if (error) {
+      console.warn("Reaction error (probably duplicate):", error.message);
+    }
+    // Silent background sync to get the real state
+    syncPostsSilently();
   };
 
   const syncPostsSilently = async () => {
-    const { data: fullData } = await supabase
+    let query = supabase
       .from("posts")
       .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, content, profiles(username, full_name, avatar_url))")
       .order("created_at", { ascending: false })
       .limit(20);
-    if (fullData) setPosts((fullData as unknown as Post[]) ?? []);
+
+    if (activeTab === 'oratorio') {
+      query = query.eq('is_anonymous', true);
+    } else {
+      query = query.neq('is_anonymous', true);
+    }
+
+    if (communityId) {
+      query = query.eq('community_id', communityId);
+    } else {
+      query = query.is('community_id', null);
+    }
+
+    const { data } = await query;
+    if (data) setPosts(data as unknown as Post[]);
   };
 
   const submitComment = async (postId: string) => {

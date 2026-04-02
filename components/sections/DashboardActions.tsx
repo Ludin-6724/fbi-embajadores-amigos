@@ -112,22 +112,27 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Modals — Full screen on mobile, centered card on desktop */}
       {activeModal && (
-        <div className="fixed inset-0 bg-navy-dark/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
-          <div className="bg-white w-[95%] max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-gold/20 my-auto">
-            <div className="flex items-center justify-between p-6 border-b border-light-gray bg-cream">
-              <h3 className="font-serif text-xl font-bold text-navy-dark">
+        <div 
+          className="fixed inset-0 bg-navy-dark/40 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center animate-fade-in" 
+          onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+        >
+          <div className="bg-white w-full sm:w-[95%] sm:max-w-lg sm:rounded-3xl rounded-t-3xl shadow-2xl border border-gold/20 max-h-[90vh] flex flex-col">
+            {/* Header — sticky */}
+            <div className="flex items-center justify-between p-5 sm:p-6 border-b border-light-gray bg-cream rounded-t-3xl flex-shrink-0">
+              <h3 className="font-serif text-lg sm:text-xl font-bold text-navy-dark">
                 {activeModal === "post" ? "Crear Publicación" : activeModal === "prayer" ? "Petición Anónima" : "Nueva Comunidad"}
               </h3>
-              <button onClick={handleClose} className="text-navy-dark/50 hover:text-navy-dark">
+              <button onClick={handleClose} className="text-navy-dark/50 hover:text-navy-dark p-1">
                 <X size={24} />
               </button>
             </div>
             
+            {/* Body — scrollable */}
             <form 
              onSubmit={(e) => activeModal === "community" ? e.preventDefault() : handlePostSubmit(e, activeModal === "prayer")} 
-             className="p-6 space-y-4"
+             className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1"
             >
               {activeModal === "community" ? (
                 <>
@@ -147,7 +152,7 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
                      <textarea
                        name="commDesc"
                        placeholder="¿Cuál es la misión específica de este grupo?"
-                       className="w-full min-h-[100px] p-3 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
+                       className="w-full min-h-[80px] p-3 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
                      />
                    </div>
                    {/* Privacidad */}
@@ -163,7 +168,7 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
                        >
                          <Globe size={20} className={!commPrivate ? "text-gold" : "text-navy-dark/40"} />
                          <span className={`font-sans text-xs font-bold ${!commPrivate ? "text-gold" : "text-navy-dark/60"}`}>Público</span>
-                         <span className="font-sans text-[10px] text-navy-dark/40 text-center leading-tight">Cualquiera puede unirse directamente</span>
+                         <span className="font-sans text-[10px] text-navy-dark/40 text-center leading-tight">Cualquiera puede unirse</span>
                        </button>
                        <button
                          type="button"
@@ -174,7 +179,7 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
                        >
                          <Lock size={20} className={commPrivate ? "text-gold" : "text-navy-dark/40"} />
                          <span className={`font-sans text-xs font-bold ${commPrivate ? "text-gold" : "text-navy-dark/60"}`}>Privado</span>
-                         <span className="font-sans text-[10px] text-navy-dark/40 text-center leading-tight">Requiere solicitud o link de invitación</span>
+                         <span className="font-sans text-[10px] text-navy-dark/40 text-center leading-tight">Requiere invitación</span>
                        </button>
                      </div>
                    </div>
@@ -206,8 +211,6 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
                        setFormError(null);
                        setSubmitting(true);
 
-                       console.log("[FBI] Insertando comunidad. owner_id:", profile.id);
-
                        const { data, error } = await supabase
                          .from('communities')
                          .insert({
@@ -218,8 +221,6 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
                          })
                          .select()
                          .single();
-
-                       console.log("[FBI] Resultado:", { data, error });
 
                        if (!error && data) {
                          await supabase.from('community_members').insert({
@@ -247,7 +248,7 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   placeholder={activeModal === "post" ? "¿Qué luz vas a compartir hoy con la comunidad?" : "Escribe tu petición o testimonio de forma completamente anónima..."}
-                  className="w-full min-h-[150px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
+                  className="w-full min-h-[120px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
                   required
                  />
                  {formError && (
