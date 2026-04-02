@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fbi-amigos-v2';
+const CACHE_NAME = 'fbi-amigos-v3';
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/logo-fbi.jpg',
