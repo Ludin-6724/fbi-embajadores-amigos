@@ -60,7 +60,7 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
 
       let query = supabase
         .from("posts")
-        .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, content, profiles(username, full_name, avatar_url))")
+        .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, author_id, content, profiles(username, full_name, avatar_url))")
         .order("created_at", { ascending: false })
         .limit(20);
 
@@ -170,7 +170,7 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
   const syncPostsSilently = async () => {
     let query = supabase
       .from("posts")
-      .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, content, profiles(username, full_name, avatar_url))")
+      .select("id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(reaction), comments(id, author_id, content, profiles(username, full_name, avatar_url))")
       .order("created_at", { ascending: false })
       .limit(20);
 
@@ -206,6 +206,7 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
           ...post,
           comments: [...currentComments, { 
             id: 'temp-' + Date.now(), 
+            author_id: user.id, // Add author_id for immediate delete button access
             content: newCommentContent, 
             profiles: { username: 'Tú', full_name: 'Tú', avatar_url: null }
           }]
@@ -220,7 +221,29 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
       content: newCommentContent
     });
     
-    await syncPostsSilently();
+    // Standard delay for DB to propagate before sync
+    setTimeout(() => syncPostsSilently(), 1500);
+  };
+
+  const handleDeleteComment = async (postId: string, commentId: string) => {
+    // Optimistic Delete: Remove from UI instantly
+    setPosts(prevPosts => prevPosts.map(post => {
+      if (post.id === postId) {
+        return {
+          ...post,
+          comments: (post.comments || []).filter(c => c.id !== commentId)
+        };
+      }
+      return post;
+    }));
+
+    const { error } = await supabase.from("comments").delete().eq("id", commentId);
+    
+    if (error) {
+      console.warn("Delete comment error:", error.message);
+      setNotification({ message: "No se pudo eliminar el comentario", type: 'error' });
+      fetchPosts(); // Rollback to real state
+    }
   };
 
   return (
@@ -412,9 +435,19 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
                                 }
                               </div>
                               <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-light-gray shadow-sm flex-1">
-                                <p className="font-semibold font-sans text-xs text-navy-dark mb-1">
-                                  {comment.profiles?.username || comment.profiles?.full_name || "Agente"}
-                                </p>
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <p className="font-semibold font-sans text-xs text-navy-dark">
+                                    {comment.profiles?.username || comment.profiles?.full_name || "Agente"}
+                                  </p>
+                                  {currentUserId === (comment as any).author_id && (
+                                    <button 
+                                      onClick={() => handleDeleteComment(post.id, comment.id)}
+                                      className="text-[10px] text-red-500/50 hover:text-red-500 pr-1 transition-colors"
+                                    >
+                                      Eliminar
+                                    </button>
+                                  )}
+                                </div>
                                 <p className="text-sm font-sans text-navy-dark/80">{comment.content}</p>
                               </div>
                             </div>
