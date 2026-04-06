@@ -1,50 +1,42 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Fingerprint, MessageSquare, Loader2, Send } from "lucide-react";
+import { Fingerprint, MessageSquare, Loader2, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
+import Link from "next/link";
 
 /* ─── Types ─── */
-type ReactionRow = { id: string; user_id: string; reaction: ReactionType; };
-type CommentRow = {
-  id: string; post_id: string; author_id: string; content: string; created_at: string;
+type ReactionRow = { id: string; user_id: string; reaction: ReactionType };
+type CommentPreview = {
+  id: string; post_id: string; content: string; created_at: string;
   profiles: { username: string | null; avatar_url: string | null } | null;
-  comment_reactions: ReactionRow[];
 };
 type Post = {
-  id: string; author_id: string; content: string; is_anonymous?: boolean;
-  community_id?: string | null; created_at: string; comment_count: number;
+  id: string; author_id: string; content: string;
+  is_anonymous?: boolean; community_id?: string | null; created_at: string;
   profiles: { username: string | null; full_name: string | null; avatar_url: string | null } | null;
   post_reactions: ReactionRow[];
 };
 
-/* Lightweight query — no nested comments */
+/* Minimal query — no comment joins (they caused hangs) */
 const POST_SELECT = `
   id, author_id, content, is_anonymous, community_id, created_at,
   profiles(username, full_name, avatar_url),
-  post_reactions(id, user_id, reaction),
-  comment_count:comments(count)
-`.replace(/\s+/g, " ").trim();
-
-const COMMENT_SELECT = `
-  id, post_id, author_id, content, created_at,
-  profiles(username, avatar_url),
-  comment_reactions(id, user_id, reaction)
+  post_reactions(id, user_id, reaction)
 `.replace(/\s+/g, " ").trim();
 
 export default function Comunidad({
-  communityId, initialTab = "muro", hideTabs = false, postId, initialProfile, isAllowedToFetch = true
+  communityId, initialTab = "muro", hideTabs = false,
+  postId, initialProfile, isAllowedToFetch = true
 }: {
-  communityId?: string, initialTab?: "muro" | "oratorio", hideTabs?: boolean,
-  postId?: string, initialProfile?: any, isAllowedToFetch?: boolean
+  communityId?: string; initialTab?: "muro" | "oratorio"; hideTabs?: boolean;
+  postId?: string; initialProfile?: any; isAllowedToFetch?: boolean;
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openComments, setOpenComments] = useState<string | null>(null);
-  const [comments, setComments] = useState<Record<string, CommentRow[]>>({});
-  const [loadingComments, setLoadingComments] = useState<string | null>(null);
-  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
+  const [commentPreviews, setCommentPreviews] = useState<Record<string, CommentPreview[]>>({});
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [userId, setUserId] = useState<string | null>(initialProfile?.id || null);
   const [activeTab, setActiveTab] = useState<"muro" | "oratorio">(initialTab);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -75,14 +67,13 @@ export default function Comunidad({
     if (!isLoadMore) setLoading(true);
     setError(null);
 
-    // Use local flag instead of stale state closure
     let finished = false;
     const timeoutId = setTimeout(() => {
       if (!finished) {
         setLoading(false);
-        setError("Tiempo de espera agotado. Verifica tu conexión y reintenta.");
+        setError("Tiempo de espera agotado. Verifica tu conexión.");
       }
-    }, 12000);
+    }, 15000);
 
     try {
       let q = supabase
@@ -101,27 +92,49 @@ export default function Comunidad({
       }
 
       const { data, error: qError } = await q as { data: any; error: any };
-
       finished = true;
       clearTimeout(timeoutId);
 
-      if (qError) {
-        setError(`Error: ${qError.message}`);
-      } else {
-        // Normalize: comment_count comes as [{count: N}]
-        const normalized: Post[] = (data ?? []).map((p: any) => ({
-          ...p,
-          comment_count: Array.isArray(p.comment_count) ? (p.comment_count[0]?.count ?? 0) : (p.comment_count ?? 0),
-          post_reactions: p.post_reactions ?? [],
-        }));
-        if (normalized.length < pageSize) setHasMore(false);
-        if (page === 0) setPosts(normalized);
-        else setPosts(prev => [...prev, ...normalized]);
+      if (qError) { setError(`Error: ${qError.message}`); return; }
+
+      const fetched: Post[] = (data ?? []).map((p: any) => ({
+        ...p,
+        post_reactions: p.post_reactions ?? [],
+      }));
+
+      if (fetched.length < pageSize) setHasMore(false);
+      if (page === 0) setPosts(fetched);
+      else setPosts(prev => [...prev, ...fetched]);
+
+      /* — Load 2 comment previews per post (non-blocking, best-effort) — */
+      if (fetched.length > 0) {
+        const ids = fetched.map(p => p.id);
+        supabase
+          .from("comments")
+          .select("id, post_id, content, created_at, profiles(username, avatar_url)")
+          .in("post_id", ids)
+          .order("created_at", { ascending: false })
+          .limit(ids.length * 4)
+          .then(({ data: cData }: { data: any }) => {
+            if (!cData) return;
+            const previews: Record<string, CommentPreview[]> = {};
+            const counts: Record<string, number> = {};
+            for (const c of cData) {
+              counts[c.post_id] = (counts[c.post_id] ?? 0) + 1;
+              if (!previews[c.post_id]) previews[c.post_id] = [];
+              // We fetched in DESC order — reverse later to show oldest-first
+              if (previews[c.post_id].length < 2) previews[c.post_id].push(c);
+            }
+            // Reverse previews so oldest comment appears first
+            Object.keys(previews).forEach(k => previews[k].reverse());
+            setCommentPreviews(prev => ({ ...prev, ...previews }));
+            setCommentCounts(prev => ({ ...prev, ...counts }));
+          });
       }
-    } catch (err: any) {
+    } catch {
       finished = true;
       clearTimeout(timeoutId);
-      setError("Fallo de conexión. Reintenta.");
+      setError("Error de red. Reintenta.");
     } finally {
       setLoading(false);
     }
@@ -131,245 +144,201 @@ export default function Comunidad({
     if (isAllowedToFetch) fetchPosts(page > 0);
   }, [page, communityId, postId, isAllowedToFetch, fetchPosts]);
 
-  /* Load comments on demand */
-  const handleToggleComments = async (postId: string) => {
-    if (openComments === postId) { setOpenComments(null); return; }
-    setOpenComments(postId);
-    if (comments[postId]) return; // already loaded
-    setLoadingComments(postId);
-    const { data } = await supabase
-      .from("comments")
-      .select(COMMENT_SELECT)
-      .eq("post_id", postId)
-      .order("created_at", { ascending: true }) as { data: any };
-    setComments(prev => ({
-      ...prev,
-      [postId]: (data ?? []).map((c: any) => ({ ...c, comment_reactions: c.comment_reactions ?? [] }))
-    }));
-    setLoadingComments(null);
-  };
-
-  const handleSubmitComment = async (pId: string) => {
-    const text = (commentTexts[pId] || "").trim();
-    if (!text || !userId) return;
-    setCommentTexts(prev => ({ ...prev, [pId]: "" }));
-    const { data } = await supabase
-      .from("comments")
-      .insert({ post_id: pId, author_id: userId, content: text })
-      .select(COMMENT_SELECT)
-      .single() as { data: any };
-    if (data) {
-      setComments(prev => ({
-        ...prev,
-        [pId]: [...(prev[pId] ?? []), { ...data, comment_reactions: [] }]
-      }));
-      setPosts(prev => prev.map(p => p.id === pId ? { ...p, comment_count: p.comment_count + 1 } : p));
-    }
-  };
-
+  /* ─── Reactions ─── */
   const handleToggleReaction = async (pId: string, type: ReactionType) => {
     if (!userId) { showToast("Inicia sesión para reaccionar", false); return; }
-    const post = posts.find(p => p.id === pId); if (!post) return;
+    const post = posts.find(p => p.id === pId);
+    if (!post) return;
     const mine = post.post_reactions.find(r => r.user_id === userId);
+
     if (mine) {
       if (mine.reaction === type) {
-        setPosts(prev => prev.map(p => p.id === pId ? { ...p, post_reactions: p.post_reactions.filter(r => r.id !== mine.id) } : p));
+        // Remove reaction
+        setPosts(prev => prev.map(p => p.id === pId
+          ? { ...p, post_reactions: p.post_reactions.filter(r => r.id !== mine.id) } : p));
         await supabase.from("post_reactions").delete().eq("id", mine.id);
       } else {
-        setPosts(prev => prev.map(p => p.id === pId ? { ...p, post_reactions: [...p.post_reactions.filter(r => r.user_id !== userId), { id: "temp", user_id: userId, reaction: type }] } : p));
+        // Change reaction
+        const optimistic = { id: "temp", user_id: userId, reaction: type };
+        setPosts(prev => prev.map(p => p.id === pId
+          ? { ...p, post_reactions: [...p.post_reactions.filter(r => r.user_id !== userId), optimistic] } : p));
         await supabase.from("post_reactions").delete().eq("user_id", userId).eq("post_id", pId);
-        const { data } = await supabase.from("post_reactions").insert({ post_id: pId, user_id: userId, reaction: type }).select("id, user_id, reaction").single() as { data: any };
-        if (data) setPosts(prev => prev.map(p => p.id === pId ? { ...p, post_reactions: p.post_reactions.map(r => r.user_id === userId ? (data as ReactionRow) : r) } : p));
+        const { data } = await supabase.from("post_reactions")
+          .insert({ post_id: pId, user_id: userId, reaction: type })
+          .select("id, user_id, reaction").single() as { data: any };
+        if (data) setPosts(prev => prev.map(p => p.id === pId
+          ? { ...p, post_reactions: p.post_reactions.map(r => r.user_id === userId ? data : r) } : p));
       }
     } else {
-      setPosts(prev => prev.map(p => p.id === pId ? { ...p, post_reactions: [...p.post_reactions, { id: "temp", user_id: userId, reaction: type }] } : p));
-      const { data } = await supabase.from("post_reactions").insert({ post_id: pId, user_id: userId, reaction: type }).select("id, user_id, reaction").single() as { data: any };
-      if (data) setPosts(prev => prev.map(p => p.id === pId ? { ...p, post_reactions: p.post_reactions.map(r => r.id === "temp" ? (data as ReactionRow) : r) } : p));
+      // Add reaction
+      const optimistic = { id: "temp", user_id: userId, reaction: type };
+      setPosts(prev => prev.map(p => p.id === pId
+        ? { ...p, post_reactions: [...p.post_reactions, optimistic] } : p));
+      const { data } = await supabase.from("post_reactions")
+        .insert({ post_id: pId, user_id: userId, reaction: type })
+        .select("id, user_id, reaction").single() as { data: any };
+      if (data) setPosts(prev => prev.map(p => p.id === pId
+        ? { ...p, post_reactions: p.post_reactions.map(r => r.id === "temp" ? data : r) } : p));
     }
   };
 
-  const handleToggleCommentReaction = async (cId: string, type: ReactionType, pId: string) => {
-    if (!userId) return;
-    const postComments = comments[pId] ?? [];
-    const comm = postComments.find(c => c.id === cId); if (!comm) return;
-    const mine = comm.comment_reactions.find(r => r.user_id === userId);
-    const updateComments = (fn: (c: CommentRow) => CommentRow) =>
-      setComments(prev => ({ ...prev, [pId]: (prev[pId] ?? []).map(fn) }));
-    if (mine) {
-      if (mine.reaction === type) {
-        updateComments(c => c.id === cId ? { ...c, comment_reactions: c.comment_reactions.filter(r => r.id !== mine.id) } : c);
-        await supabase.from("comment_reactions").delete().eq("id", mine.id);
-      } else {
-        updateComments(c => c.id === cId ? { ...c, comment_reactions: [...c.comment_reactions.filter(r => r.user_id !== userId), { id: "temp", user_id: userId, reaction: type }] } : c);
-        await supabase.from("comment_reactions").delete().eq("user_id", userId).eq("comment_id", cId);
-        const { data } = await supabase.from("comment_reactions").insert({ comment_id: cId, user_id: userId, reaction: type }).select("id, user_id, reaction").single() as { data: any };
-        if (data) updateComments(c => c.id === cId ? { ...c, comment_reactions: c.comment_reactions.map(r => r.user_id === userId ? (data as ReactionRow) : r) } : c);
-      }
-    } else {
-      updateComments(c => c.id === cId ? { ...c, comment_reactions: [...c.comment_reactions, { id: "temp", user_id: userId, reaction: type }] } : c);
-      const { data } = await supabase.from("comment_reactions").insert({ comment_id: cId, user_id: userId, reaction: type }).select("id, user_id, reaction").single() as { data: any };
-      if (data) updateComments(c => c.id === cId ? { ...c, comment_reactions: c.comment_reactions.map(r => r.id === "temp" ? (data as ReactionRow) : r) } : c);
-    }
+  const emojiMap: Record<string, string> = {
+    like: "👍", heart: "❤️", haha: "😂", amen: "🙏", pray: "🙌"
   };
-
-  const emojiMap: Record<string, string> = { like: "👍", heart: "❤️", haha: "😂", amen: "🙏", pray: "🙌" };
+  const labelMap: Record<string, string> = {
+    like: "Me gusta", heart: "Me encanta", haha: "Me divierte", amen: "Amén", pray: "Oración"
+  };
 
   const timeAgo = (d: string) => {
     const diff = Date.now() - new Date(d).getTime();
     if (diff < 60000) return "ahora";
-    const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60); if (hrs < 24) return `${hrs}h`;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
     return new Date(d).toLocaleDateString("es-ES", { month: "short", day: "numeric" });
   };
 
+  /* ─── Render ─── */
   return (
     <section className="py-20 bg-cream text-navy-dark relative z-10" id="comunidad">
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-xl bg-navy-dark text-white border border-gold/30">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-xl bg-navy-dark text-white border border-gold/30 pointer-events-none">
           <p className="font-bold text-sm">{toast.msg}</p>
         </div>
       )}
+
       <div className="container mx-auto px-4">
         {loading && posts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-32">
-            <Loader2 className="w-10 h-10 animate-spin text-gold mb-4" />
-            <p className="text-sm font-bold text-gold uppercase">Cargando muro...</p>
+          <div className="flex flex-col items-center justify-center py-32 gap-4">
+            <Loader2 className="w-10 h-10 animate-spin text-gold" />
+            <p className="text-sm font-bold text-gold uppercase tracking-widest">Cargando muro...</p>
           </div>
         ) : error ? (
-          <div className="max-w-md mx-auto bg-white p-8 rounded-3xl border border-red-100 text-center shadow-lg">
+          <div className="max-w-sm mx-auto bg-white p-8 rounded-3xl border border-red-100 text-center shadow-lg">
+            <p className="text-3xl mb-3">📡</p>
             <h4 className="text-red-600 font-bold mb-2">Sin conexión</h4>
-            <p className="text-xs text-navy-dark/60 mb-6">{error}</p>
-            <button onClick={() => { setPage(0); setHasMore(true); fetchPosts(); }} className="bg-navy-dark text-white px-6 py-2 rounded-full font-bold text-sm">
-              Reintentar
+            <p className="text-xs text-navy-dark/50 mb-6">{error}</p>
+            <button
+              onClick={() => { setError(null); setPage(0); setHasMore(true); fetchPosts(); }}
+              className="bg-navy-dark text-white px-8 py-3 rounded-full font-bold text-sm hover:bg-gold transition-colors"
+            >
+              🔄 Reintentar
             </button>
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto space-y-6">
+          <div className="max-w-2xl mx-auto space-y-4">
+
+            {/* Tab selector */}
             {!hideTabs && (
               <div className="flex gap-2 mb-6 bg-white p-1 rounded-full border border-gold/10 shadow-sm max-w-xs mx-auto">
-                <button onClick={() => setActiveTab("muro")} className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${activeTab === "muro" ? "bg-navy-dark text-white shadow-md" : "text-navy-dark/40 hover:text-navy-dark"}`}>Muro</button>
-                <button onClick={() => setActiveTab("oratorio")} className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${activeTab === "oratorio" ? "bg-navy-dark text-white shadow-md" : "text-navy-dark/40 hover:text-navy-dark"}`}>Oración</button>
+                <button
+                  onClick={() => { if (activeTab !== "muro") { setActiveTab("muro"); setPage(0); setHasMore(true); } }}
+                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${activeTab === "muro" ? "bg-navy-dark text-white shadow-md" : "text-navy-dark/40 hover:text-navy-dark"}`}
+                >Muro</button>
+                <button
+                  onClick={() => { if (activeTab !== "oratorio") { setActiveTab("oratorio"); setPage(0); setHasMore(true); } }}
+                  className={`flex-1 py-2 rounded-full text-xs font-bold transition-all ${activeTab === "oratorio" ? "bg-navy-dark text-white shadow-md" : "text-navy-dark/40 hover:text-navy-dark"}`}
+                >Oración</button>
               </div>
             )}
 
+            {/* Posts */}
             {posts.map(post => {
               const name = post.is_anonymous ? "Agente Anónimo" : post.profiles?.username || "Agente";
               const myR = post.post_reactions.find(r => r.user_id === userId)?.reaction;
-              const postComments = comments[post.id] ?? [];
+              const totalReactions = post.post_reactions.length;
+              const uniqueTypes = Array.from(new Set(post.post_reactions.map(r => r.reaction)));
+              const previews = commentPreviews[post.id] ?? [];
+              const commentCount = commentCounts[post.id] ?? 0;
+              const extraComments = Math.max(0, commentCount - previews.length);
+
               return (
-                <div key={post.id} className="bg-white rounded-3xl p-6 shadow-sm border border-gold/10 hover:shadow-md transition-all relative">
-                  {/* Header */}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-11 h-11 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {post.profiles?.avatar_url && !post.is_anonymous
-                        ? <img src={post.profiles.avatar_url} className="w-full h-full object-cover" alt={name} />
-                        : <span className="font-bold text-gold">{post.is_anonymous ? <Fingerprint size={20} /> : name[0]}</span>
-                      }
+                <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-visible">
+
+                  {/* Post header */}
+                  <div className="px-4 pt-4 pb-3">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {post.profiles?.avatar_url && !post.is_anonymous
+                          ? <img src={post.profiles.avatar_url} className="w-full h-full object-cover" alt={name} />
+                          : <span className="font-bold text-gold">{post.is_anonymous ? <Fingerprint size={18} /> : name[0]}</span>
+                        }
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm text-navy-dark leading-none">{name}</p>
+                        <p className="text-[10px] text-navy-dark/40 mt-0.5">{timeAgo(post.created_at)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-navy-dark leading-none pb-1">{name}</p>
-                      <p className="text-[10px] text-navy-dark/40">{timeAgo(post.created_at)}</p>
-                    </div>
+                    <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
                   </div>
 
-                  {/* Content */}
-                  <p className="text-navy-dark/90 leading-relaxed mb-6 whitespace-pre-wrap">{post.content}</p>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-between pt-3 border-t border-gold/5">
-                    <div className="flex items-center gap-3">
-                      <ReactionPicker onSelect={t => handleToggleReaction(post.id, t)} disabled={!userId}>
-                        <button className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${myR ? "bg-gold/10 text-gold border border-gold/20" : "bg-cream text-navy-dark/50 hover:bg-gold/5 border border-transparent"}`}>
-                          {myR ? (
-                            <><span className="text-xl leading-none">{emojiMap[myR]}</span><span className="text-xs">{myR}</span></>
-                          ) : (
-                            <span className="text-xs">👍 Reaccionar</span>
-                          )}
-                        </button>
-                      </ReactionPicker>
-
-                      {post.post_reactions.length > 0 && (
-                        <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow-sm border border-gold/15">
-                          <div className="flex items-center gap-1">
-                            {Array.from(new Set(post.post_reactions.map(r => r.reaction))).slice(0, 3).map(t => (
-                              <span key={t} className="text-xl leading-none">{emojiMap[t]}</span>
-                            ))}
-                          </div>
-                          <span className="text-xs font-bold text-navy-dark/60">{post.post_reactions.length}</span>
-                        </div>
+                  {/* Reaction summary (only if there are reactions) */}
+                  {totalReactions > 0 && (
+                    <div className="px-4 py-2 flex items-center gap-2 border-t border-gray-50">
+                      <div className="flex items-center gap-0.5">
+                        {uniqueTypes.slice(0, 3).map(t => (
+                          <span key={t} className="text-[18px] leading-none">{emojiMap[t]}</span>
+                        ))}
+                      </div>
+                      <span className="text-xs text-navy-dark/50 font-medium">{totalReactions}</span>
+                      {commentCount > 0 && (
+                        <span className="ml-auto text-xs text-navy-dark/40">
+                          {commentCount} comentario{commentCount !== 1 ? "s" : ""}
+                        </span>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleToggleComments(post.id)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold text-navy-dark/50 hover:bg-gold/5 active:scale-95 transition-all"
+                  )}
+
+                  {/* Action buttons — Facebook style */}
+                  <div className="border-t border-gray-100 grid grid-cols-2">
+                    {/* Reaction button */}
+                    <ReactionPicker
+                      onSelect={t => handleToggleReaction(post.id, t)}
+                      disabled={!userId}
+                      currentReaction={myR}
                     >
-                      <MessageSquare size={14} />
-                      {post.comment_count ?? 0}
-                    </button>
+                      <button className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-all hover:bg-gray-50 active:bg-gray-100 ${myR ? "text-gold" : "text-navy-dark/50"}`}>
+                        <span className="text-xl leading-none">{myR ? emojiMap[myR] : "👍"}</span>
+                        <span className="text-xs">{myR ? labelMap[myR] : "Me gusta"}</span>
+                      </button>
+                    </ReactionPicker>
+
+                    {/* Comment button → link to full post */}
+                    <Link
+                      href={`/post/${post.id}`}
+                      className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 border-l border-gray-100 transition-all"
+                    >
+                      <MessageSquare size={17} />
+                      <span className="text-xs">Comentar</span>
+                    </Link>
                   </div>
 
-                  {/* Comments — loaded on demand */}
-                  {openComments === post.id && (
-                    <div className="mt-4 pt-4 border-t border-gold/10">
-                      {loadingComments === post.id ? (
-                        <div className="flex justify-center py-4">
-                          <Loader2 size={20} className="animate-spin text-gold" />
-                        </div>
-                      ) : (
-                        <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
-                          {postComments.map(c => {
-                            const cName = c.profiles?.username || "Agente";
-                            const cHasMine = c.comment_reactions?.some(r => r.user_id === userId);
-                            return (
-                              <div key={c.id} className="flex gap-3 mt-3">
-                                <div className="w-8 h-8 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-xs font-bold text-gold border border-gold/20 overflow-hidden shadow-sm">
-                                  {c.profiles?.avatar_url ? <img src={c.profiles.avatar_url} className="w-full h-full object-cover" alt={cName} /> : cName[0]}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="relative inline-block max-w-full">
-                                    <div className="bg-cream/40 backdrop-blur-sm rounded-2xl px-4 py-2 border border-gold/5">
-                                      <p className="font-bold text-xs text-navy-dark/90 mb-0.5">{cName}</p>
-                                      <p className="text-sm text-navy-dark/80 break-words leading-relaxed">{c.content}</p>
-                                    </div>
-                                    {c.comment_reactions?.length > 0 && (
-                                      <div className="absolute -right-2 -bottom-2 flex items-center bg-white rounded-full px-1.5 py-0.5 shadow-sm border border-gold/10 gap-1">
-                                        {Array.from(new Set(c.comment_reactions.map(r => r.reaction))).slice(0, 2).map(t => (
-                                          <span key={t} className="text-[10px]">{emojiMap[t]}</span>
-                                        ))}
-                                        <span className="text-[9px] font-bold text-navy-dark/50">{c.comment_reactions.length}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-4 mt-1.5 pl-1">
-                                    <span className="text-[10px] text-navy-dark/30 font-medium">{timeAgo(c.created_at)}</span>
-                                    <ReactionPicker onSelect={t => handleToggleCommentReaction(c.id, t, post.id)}>
-                                      <button className={`text-[10px] font-bold transition-colors ${cHasMine ? "text-gold" : "text-navy-dark/40 hover:text-gold"}`}>
-                                        Reaccionar
-                                      </button>
-                                    </ReactionPicker>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {userId && (
-                        <div className="mt-4">
-                          <div className="flex gap-2 bg-cream/40 p-2 rounded-full border border-gold/10">
-                            <input
-                              type="text"
-                              value={commentTexts[post.id] || ""}
-                              onChange={e => setCommentTexts(p => ({ ...p, [post.id]: e.target.value }))}
-                              placeholder="Responder..."
-                              className="flex-1 bg-transparent border-none outline-none text-xs px-2"
-                              onKeyDown={e => e.key === "Enter" && handleSubmitComment(post.id)}
-                            />
-                            <button onClick={() => handleSubmitComment(post.id)} className="w-8 h-8 bg-navy-dark text-white rounded-full flex items-center justify-center hover:bg-gold transition-colors">
-                              <Send size={12} />
-                            </button>
+                  {/* Comment previews (2 max) */}
+                  {previews.length > 0 && (
+                    <div className="px-4 pb-4 pt-3 border-t border-gray-50 space-y-2.5">
+                      {previews.map(c => (
+                        <div key={c.id} className="flex gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-gold border border-gold/20 overflow-hidden">
+                            {c.profiles?.avatar_url
+                              ? <img src={c.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
+                              : (c.profiles?.username?.[0]?.toUpperCase() ?? "A")}
+                          </div>
+                          <div className="flex-1 bg-gray-50 rounded-2xl px-3 py-2">
+                            <p className="text-[11px] font-bold text-navy-dark">{c.profiles?.username || "Agente"}</p>
+                            <p className="text-xs text-navy-dark/80 leading-snug mt-0.5">{c.content}</p>
                           </div>
                         </div>
+                      ))}
+
+                      {extraComments > 0 && (
+                        <Link
+                          href={`/post/${post.id}`}
+                          className="flex items-center gap-1 text-[11px] font-bold text-navy-dark/40 hover:text-gold transition-colors pl-9"
+                        >
+                          Ver {extraComments} comentario{extraComments !== 1 ? "s" : ""} más
+                          <ChevronRight size={11} />
+                        </Link>
                       )}
                     </div>
                   )}
@@ -377,17 +346,19 @@ export default function Comunidad({
               );
             })}
 
+            {/* Load more */}
             {hasMore && !loading && posts.length > 0 && (
               <button
                 onClick={() => setPage(p => p + 1)}
                 className="w-full py-4 text-xs font-bold text-gold uppercase tracking-widest hover:text-navy-dark transition-colors"
               >
-                Cargar más
+                Cargar más publicaciones
               </button>
             )}
 
             {posts.length === 0 && !loading && (
               <div className="text-center py-16 text-navy-dark/40">
+                <p className="text-4xl mb-3">✨</p>
                 <p className="font-bold text-sm">Sin publicaciones aún.</p>
                 <p className="text-xs mt-1">¡Sé el primero en compartir!</p>
               </div>
