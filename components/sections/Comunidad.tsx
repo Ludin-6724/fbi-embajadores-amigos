@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Fingerprint, MessageSquare, Loader2, ChevronRight } from "lucide-react";
+import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
 import Link from "next/link";
@@ -9,7 +9,7 @@ import Link from "next/link";
 /* ─── Types ─── */
 type ReactionRow = { id: string; user_id: string; reaction: ReactionType };
 type CommentPreview = {
-  id: string; post_id: string; content: string; created_at: string;
+  id: string; post_id: string; author_id: string; parent_id: string | null; content: string; created_at: string;
   profiles: { username: string | null; avatar_url: string | null } | null;
 };
 type Post = {
@@ -41,6 +41,10 @@ export default function Comunidad({
   const [error, setError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -104,12 +108,12 @@ export default function Comunidad({
       else setPosts(fetched);
       setLoading(false);
 
-      // Load comments (all if postId is set, otherwise 2 previews per post)
+        // Load comments (all if postId is set, otherwise 2 previews per post)
       if (fetched.length > 0) {
         const ids = fetched.map(p => p.id);
         let q = supabase
           .from("comments")
-          .select("id, post_id, content, created_at, profiles(username, avatar_url)")
+          .select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url)")
           .in("post_id", ids)
           .order("created_at", { ascending: false });
           
@@ -208,8 +212,9 @@ export default function Comunidad({
       const { data, error: insertError } = await sbRef.current.from("comments").insert({
         post_id: pId,
         author_id: userId,
-        content: commentText.trim()
-      }).select("id, post_id, content, created_at, profiles(username, avatar_url)").single() as { data: any, error: any };
+        content: commentText.trim(),
+        parent_id: replyingTo?.id || null
+      }).select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url)").single() as { data: any, error: any };
 
       if (insertError) throw insertError;
       
@@ -222,10 +227,54 @@ export default function Comunidad({
         [pId]: (prev[pId] || 0) + 1
       }));
       setCommentText("");
+      setReplyingTo(null);
     } catch (err: any) {
       showToast(`Error: ${err.message || "Error al comentar"}`, false);
     } finally {
       setIsSubmittingComment(false);
+    }
+  };
+
+  const handleEditComment = async (cId: string, pId: string) => {
+    if (!editContent.trim()) return;
+    try {
+      const { error } = await sbRef.current.from("comments").update({ content: editContent.trim() }).eq("id", cId);
+      if (error) throw error;
+      setCommentPreviews(prev => ({
+        ...prev,
+        [pId]: (prev[pId] || []).map(c => c.id === cId ? { ...c, content: editContent.trim() } : c)
+      }));
+      setEditingCommentId(null);
+      setOpenDropdownId(null);
+      showToast("Comentario actualizado");
+    } catch (err) {
+      showToast("Error al editar comentario", false);
+    }
+  };
+
+  const handleDeleteComment = async (cId: string, pId: string) => {
+    if (!window.confirm("¿Seguro que deseas eliminar este comentario?")) return;
+    try {
+      const { error } = await sbRef.current.from("comments").delete().eq("id", cId);
+      if (error) throw error;
+      setCommentPreviews(prev => ({
+        ...prev,
+        [pId]: (prev[pId] || []).filter(c => c.id !== cId && c.parent_id !== cId)
+      }));
+      setCommentCounts(prev => ({ ...prev, [pId]: Math.max(0, (prev[pId] || 1) - 1) }));
+      showToast("Comentario eliminado");
+    } catch (err) {
+      showToast("Error al eliminar comentario", false);
+    }
+  };
+
+  const handleShare = async (pId: string) => {
+    const url = `${window.location.origin}/post/${pId}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Publicación en FBI Amigos', url }); } catch (err) {}
+    } else {
+      navigator.clipboard.writeText(url);
+      showToast("Enlace copiado al portapapeles");
     }
   };
 
@@ -332,7 +381,7 @@ export default function Comunidad({
                   )}
 
                   {/* Action buttons */}
-                  <div className="border-t border-gray-100 grid grid-cols-2">
+                  <div className="border-t border-gray-100 grid grid-cols-3">
                     <ReactionPicker
                       onSelect={t => handleToggleReaction(post.id, t)}
                       disabled={!userId}
@@ -346,17 +395,25 @@ export default function Comunidad({
 
                     <Link
                       href={`/post/${post.id}`}
-                      className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 border-l border-gray-100 transition-all"
+                      className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 border-l border-r border-gray-100 transition-all"
                     >
                       <MessageSquare size={17} />
                       <span className="text-xs">Comentar</span>
                     </Link>
+
+                    <button
+                      onClick={() => handleShare(post.id)}
+                      className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 transition-all"
+                    >
+                      <Share2 size={17} />
+                      <span className="text-xs">Compartir</span>
+                    </button>
                   </div>
 
                   {/* Comments section */}
                   {(previews.length > 0 || postId) && (
                     <div className="px-4 pb-4 pt-4 border-t border-gray-50 space-y-4">
-                      {previews.map(c => (
+                      {!postId ? previews.slice(0,2).map(c => (
                         <div key={c.id} className="flex gap-3">
                           <div className="w-8 h-8 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
                             {c.profiles?.avatar_url
@@ -366,9 +423,99 @@ export default function Comunidad({
                           <div className="flex-1 bg-gray-50/80 rounded-2xl px-4 py-2.5">
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <p className="text-[12px] font-bold text-navy-dark">{c.profiles?.username || "Agente"}</p>
-                              {postId && <p className="text-[9px] text-navy-dark/40">{timeAgo(c.created_at)}</p>}
                             </div>
-                            <p className={`text-xs text-navy-dark/80 leading-relaxed ${!postId ? "line-clamp-2" : "whitespace-pre-wrap"}`}>{c.content}</p>
+                            <p className="text-xs text-navy-dark/80 leading-relaxed line-clamp-2">{c.content}</p>
+                          </div>
+                        </div>
+                      )) : previews.filter(c => !c.parent_id).map(rootC => (
+                        <div key={rootC.id} className="space-y-3">
+                          {/* ROOT COMMENT */}
+                          <div className="flex gap-3">
+                            <div className="w-8 h-8 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
+                              {rootC.profiles?.avatar_url ? <img src={rootC.profiles.avatar_url} className="w-full h-full object-cover" /> : (rootC.profiles?.username?.[0]?.toUpperCase() ?? "A")}
+                            </div>
+                            <div className="flex-1">
+                              <div className="bg-gray-50/80 rounded-2xl px-4 py-2.5 relative group">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <p className="text-[12px] font-bold text-navy-dark">{rootC.profiles?.username || "Agente"}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-[9px] text-navy-dark/40">{timeAgo(rootC.created_at)}</p>
+                                    {userId === rootC.author_id && (
+                                      <div className="relative">
+                                        <button onClick={() => setOpenDropdownId(openDropdownId === rootC.id ? null : rootC.id)} className="text-navy-dark/30 hover:text-navy-dark/70 transition-colors p-1"><MoreHorizontal size={14}/></button>
+                                        {openDropdownId === rootC.id && (
+                                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gold/10 py-1 z-20 overflow-hidden">
+                                            <button onClick={() => { setEditingCommentId(rootC.id); setEditContent(rootC.content); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-xs font-bold text-navy-dark/70 hover:bg-gray-50 flex items-center gap-2"><Pen size={12}/> Editar</button>
+                                            <button onClick={() => handleDeleteComment(rootC.id, post.id)} className="w-full text-left px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"><Trash2 size={12}/> Eliminar</button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                {editingCommentId === rootC.id ? (
+                                  <div className="mt-2">
+                                    <textarea autoFocus value={editContent} onChange={e => setEditContent(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-gold outline-none resize-none" rows={2}/>
+                                    <div className="flex justify-end gap-2 mt-2">
+                                      <button onClick={() => setEditingCommentId(null)} className="text-[10px] font-bold text-navy-dark/50 hover:text-navy-dark px-2">Cancelar</button>
+                                      <button onClick={() => handleEditComment(rootC.id, post.id)} className="text-[10px] bg-navy-dark text-white px-3 py-1 rounded-full font-bold">Guardar</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-navy-dark/80 leading-relaxed whitespace-pre-wrap">{rootC.content}</p>
+                                )}
+                              </div>
+                              {/* Reply Action */}
+                              {!editingCommentId && (
+                                <div className="px-4 mt-1">
+                                  <button onClick={() => setReplyingTo({ id: rootC.id, username: rootC.profiles?.username || "Agente" })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors">Responder</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* REPLIES */}
+                          <div className="pl-11 space-y-3">
+                            {previews.filter(r => r.parent_id === rootC.id).map(reply => (
+                              <div key={reply.id} className="flex gap-2.5">
+                                <CornerDownRight size={14} className="text-navy-dark/20 mt-1.5 flex-shrink-0" />
+                                <div className="w-6 h-6 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
+                                  {reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} className="w-full h-full object-cover" /> : (reply.profiles?.username?.[0]?.toUpperCase() ?? "A")}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="bg-gray-50/80 rounded-2xl px-3 py-2 relative group">
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                      <p className="text-[11px] font-bold text-navy-dark">{reply.profiles?.username || "Agente"}</p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-[9px] text-navy-dark/40">{timeAgo(reply.created_at)}</p>
+                                        {userId === reply.author_id && (
+                                          <div className="relative">
+                                            <button onClick={() => setOpenDropdownId(openDropdownId === reply.id ? null : reply.id)} className="text-navy-dark/30 hover:text-navy-dark/70 transition-colors p-1"><MoreHorizontal size={12}/></button>
+                                            {openDropdownId === reply.id && (
+                                              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gold/10 py-1 z-20 overflow-hidden">
+                                                <button onClick={() => { setEditingCommentId(reply.id); setEditContent(reply.content); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-[10px] font-bold text-navy-dark/70 hover:bg-gray-50 flex items-center gap-2"><Pen size={10}/> Editar</button>
+                                                <button onClick={() => handleDeleteComment(reply.id, post.id)} className="w-full text-left px-4 py-2 text-[10px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"><Trash2 size={10}/> Eliminar</button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {editingCommentId === reply.id ? (
+                                      <div className="mt-2">
+                                        <textarea autoFocus value={editContent} onChange={e => setEditContent(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-[11px] focus:ring-1 focus:ring-gold outline-none resize-none" rows={2}/>
+                                        <div className="flex justify-end gap-2 mt-2">
+                                          <button onClick={() => setEditingCommentId(null)} className="text-[9px] font-bold text-navy-dark/50 hover:text-navy-dark px-2">Cancelar</button>
+                                          <button onClick={() => handleEditComment(reply.id, post.id)} className="text-[9px] bg-navy-dark text-white px-2 py-1 rounded-full font-bold">Guardar</button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-[11px] text-navy-dark/80 leading-relaxed whitespace-pre-wrap">{reply.content}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       ))}
@@ -384,39 +531,48 @@ export default function Comunidad({
 
                       {/* Comment Input Form (Only in Single Post View) */}
                       {postId && (
-                        <div className="flex gap-2 items-start pt-2 mt-2">
-                          <div className="w-8 h-8 rounded-full bg-cream border border-gold/20 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                            {initialProfile?.avatar_url 
-                              ? <img src={initialProfile.avatar_url} className="w-full h-full object-cover" />
-                              : <Fingerprint size={14} className="text-gold" />
-                            }
-                          </div>
-                          <div className="flex-1 flex flex-col gap-2">
-                             <textarea
-                               value={commentText}
-                               onChange={e => setCommentText(e.target.value)}
-                               placeholder="Escribe un comentario..."
-                               className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none shadow-sm transition-all"
-                               rows={commentText.includes('\n') ? 3 : 1}
-                               onKeyDown={e => {
-                                 if (e.key === 'Enter' && !e.shiftKey) {
-                                   e.preventDefault();
-                                   handleAddComment(post.id);
-                                 }
-                               }}
-                             />
-                             <div className="flex justify-end">
-                               <button 
-                                 onClick={() => handleAddComment(post.id)}
-                                 disabled={isSubmittingComment || !commentText.trim()}
-                                 className="px-5 py-2 bg-navy-dark text-white rounded-full text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 disabled:active:scale-100 active:scale-95 transition-all shadow-md hover:bg-gold hover:text-navy-dark"
-                               >
-                                 {isSubmittingComment ? "Enviando..." : "Comentar"}
-                               </button>
-                             </div>
+                        <div className="pt-2 mt-2">
+                          {replyingTo && (
+                            <div className="flex items-center justify-between bg-gold/10 px-4 py-2 rounded-t-xl border border-b-0 border-gold/20">
+                              <p className="text-[10px] font-bold text-gold">Respondiendo a @{replyingTo.username}</p>
+                              <button onClick={() => setReplyingTo(null)} className="text-gold hover:text-gold/70"><X size={12}/></button>
+                            </div>
+                          )}
+                          <div className={`flex gap-2 items-start ${replyingTo ? 'border border-t-0 border-gold/20 p-3 pt-4 rounded-b-xl bg-white' : ''}`}>
+                            <div className="w-8 h-8 rounded-full bg-cream border border-gold/20 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                              {initialProfile?.avatar_url 
+                                ? <img src={initialProfile.avatar_url} className="w-full h-full object-cover" />
+                                : <Fingerprint size={14} className="text-gold" />
+                              }
+                            </div>
+                            <div className="flex-1 flex flex-col gap-2">
+                               <textarea
+                                 value={commentText}
+                                 onChange={e => setCommentText(e.target.value)}
+                                 placeholder={replyingTo ? "Escribe tu respuesta..." : "Escribe un comentario..."}
+                                 className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none shadow-sm transition-all"
+                                 rows={commentText.includes('\n') ? 3 : 1}
+                                 onKeyDown={e => {
+                                   if (e.key === 'Enter' && !e.shiftKey) {
+                                     e.preventDefault();
+                                     handleAddComment(post.id);
+                                   }
+                                 }}
+                               />
+                               <div className="flex justify-end">
+                                 <button 
+                                   onClick={() => handleAddComment(post.id)}
+                                   disabled={isSubmittingComment || !commentText.trim()}
+                                   className="px-5 py-2 bg-navy-dark text-white rounded-full text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 disabled:active:scale-100 active:scale-95 transition-all shadow-md hover:bg-gold hover:text-navy-dark"
+                                 >
+                                   {isSubmittingComment ? "Enviando..." : (replyingTo ? "Responder" : "Comentar")}
+                                 </button>
+                               </div>
+                            </div>
                           </div>
                         </div>
                       )}
+
                     </div>
                   )}
                 </div>
