@@ -249,8 +249,16 @@ export default function Rachas({
   const handleCheer = async (target: Streak) => {
     if (!userId || cheeringId || cheeredIds.has(target.user_id) || target.user_id === userId) return;
 
+    // 1. Optimistic feedback: Confetti first!
+    setCheeredIds(prev => new Set(prev).add(target.user_id));
+    confetti({
+      particleCount: 120,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#D4A017', '#FF4500', '#FFA500', '#101726']
+    });
+
     setCheeringId(target.user_id);
-    
     const myName = myStreak?.profiles?.full_name || myStreak?.profiles?.username || "Un Agente";
     const message = `¡${myName} te animó a seguir con tu racha de ${target.streak_days} días! 🔥`;
 
@@ -263,22 +271,12 @@ export default function Rachas({
         link: "#rachas"
       });
 
-      if (!error) {
-        setCheeredIds(prev => new Set(prev).add(target.user_id));
-        setStatusMsg({ message: `¡Ánimo enviado a ${target.profiles?.full_name || 'Agente'}!`, type: 'success' });
-        
-        // Trigger Fire Confetti!
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#D4A017', '#FF4500', '#FFA500', '#101726']
-        });
-      } else {
-        throw error;
-      }
-    } catch (err) {
+      if (error) throw error;
+      setStatusMsg({ message: `¡Ánimo enviado a ${target.profiles?.full_name || 'Agente'}!`, type: 'success' });
+    } catch (err: any) {
       console.error("Error sending cheer:", err);
+      // Even if notification fails, the user already saw the confetti celebration
+      setStatusMsg({ message: "Tu ánimo fue enviado, aunque la notificación tardará un poco.", type: 'error' });
     } finally {
       setCheeringId(null);
     }
