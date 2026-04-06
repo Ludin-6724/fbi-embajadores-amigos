@@ -39,8 +39,8 @@ export default function GlobalInstallPrompt() {
     <>
       {/* Installation Banner - Top position as requested for better visibility */}
       {show && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] w-[calc(100%-2rem)] max-w-sm animate-slide-down">
-          <div className="bg-white text-navy-dark p-4 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gold/20 flex items-center gap-4 relative overflow-hidden">
+        <div className="fixed top-4 inset-x-0 z-[300] px-4 animate-slide-down">
+          <div className="bg-white text-navy-dark p-4 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gold/20 flex items-center gap-4 relative overflow-hidden max-w-sm mx-auto">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-gold" />
             
             <div className="w-12 h-12 rounded-2xl bg-gold/5 flex items-center justify-center flex-shrink-0 border border-gold/10">
@@ -119,7 +119,7 @@ export default function GlobalInstallPrompt() {
 
       <style jsx>{`
         .animate-slide-down { animation: slide-down 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        @keyframes slide-down { from { transform: translate(-50%, -100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        @keyframes slide-down { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-slide-up { animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
       `}</style>

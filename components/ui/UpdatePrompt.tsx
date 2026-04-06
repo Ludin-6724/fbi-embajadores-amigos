@@ -59,8 +59,8 @@ export default function UpdatePrompt() {
     <>
       {/* Update Notification */}
       {show && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-sm animate-bounce-in">
-          <div className="bg-navy-dark text-white p-4 rounded-2xl shadow-2xl border border-gold/30 flex items-center gap-3">
+        <div className="fixed bottom-24 inset-x-0 z-[200] px-4 animate-fade-in-up">
+          <div className="bg-navy-dark text-white p-4 rounded-2xl shadow-2xl border border-gold/30 flex items-center gap-3 max-w-sm mx-auto">
             <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center flex-shrink-0">
                 <RefreshCw className="text-gold animate-spin-slow" size={20} />
             </div>
@@ -112,12 +112,13 @@ export default function UpdatePrompt() {
       )}
       
       <style jsx>{`
-        @keyframes bounce-in {
-            0% { transform: translateY(20px) scale(0.9); opacity: 0; }
-            50% { transform: translateY(-5px) scale(1.02); opacity: 1; }
-            100% { transform: translateY(0) scale(1); opacity: 1; }
+        .animate-fade-in-up { 
+          animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
         }
-        .animate-bounce-in { animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes fade-in-up { 
+          from { transform: translateY(20px); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
         .animate-spin-slow { animation: spin 4s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
