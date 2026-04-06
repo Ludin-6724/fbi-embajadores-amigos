@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Fingerprint, MessageCircle, Heart, MessageSquare, Loader2, Send, Trash2, Edit3, X, Check } from "lucide-react";
+import { Fingerprint, MessageCircle, Heart, MessageSquare, Loader2, Send, Trash2, Edit3, X, Check, Share2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 /* ─── Types ─── */
@@ -43,7 +43,7 @@ const POST_SELECT = `
   comments(id, author_id, parent_id, content, created_at, profiles(username, full_name, avatar_url))
 `.replace(/\n/g, " ").trim();
 
-export default function Comunidad({ communityId, initialTab = "muro", hideTabs = false }: { communityId?: string, initialTab?: "muro" | "oratorio", hideTabs?: boolean }) {
+export default function Comunidad({ communityId, initialTab = "muro", hideTabs = false, postId }: { communityId?: string, initialTab?: "muro" | "oratorio", hideTabs?: boolean, postId?: string }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [openComments, setOpenComments] = useState<string | null>(null);
@@ -59,6 +59,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const pageSize = 20;
 
   const [fullComments, setFullComments] = useState<Record<string, CommentRow[]>>({});
@@ -82,7 +83,6 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
-  /* ─── Build a query with the current filters ─── */
   const buildQuery = useCallback((currentPage: number) => {
     let q = supabase
       .from("posts")
@@ -90,6 +90,11 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
       .order("created_at", { ascending: false })
       .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1)
       .limit(2, { referencedTable: "comments" });
+
+    if (postId) {
+      q = q.eq("id", postId);
+      return q;
+    }
 
     if (activeTab === "oratorio") {
       q = q.eq("is_anonymous", true);
@@ -103,12 +108,15 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
       q = q.is("community_id", null);
     }
     return q;
-  }, [activeTab, communityId]);
+  }, [activeTab, communityId, postId]);
 
   /* ─── Fetch posts from DB ─── */
   const fetchPosts = useCallback(async (silent = false, isLoadMore = false) => {
-    if (!silent && !isLoadMore) setLoading(true);
+    // Only show full loading if it's the first time and we have no posts
+    if (!silent && !isLoadMore && posts.length === 0) setLoading(true);
     if (isLoadMore) setLoadingMore(true);
+    setError(null);
+
     try {
       // getUser y posts query en paralelo — ahorra 300-500ms
       const [userResult, postsResult] = await Promise.all([
@@ -122,7 +130,8 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
       const { data, error } = postsResult;
 
       if (error) {
-        console.warn("Query error, trying fallback:", error.message);
+        console.warn("Query error:", error.message);
+        setError("No se pudieron cargar las publicaciones. Reintenta más tarde.");
       } else {
         const postsData = (data as unknown as Post[]) ?? [];
 
@@ -157,11 +166,12 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
       }
     } catch (err) {
       console.error("fetchPosts error:", err);
+      setError("Error de conexión. Verifica tu internet.");
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
       setLoadingMore(false);
     }
-  }, [buildQuery, page]);
+  }, [buildQuery, page, posts.length]);
 
   const handleLoadMore = () => {
     if (hasMore && !loadingMore) {
@@ -171,7 +181,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
 
   useEffect(() => {
     fetchPosts(false, page > 0);
-  }, [page, activeTab, communityId]);
+  }, [page, activeTab, communityId, postId]);
 
   const fetchFullComments = useCallback(async (postId: string) => {
     setFetchingFull(prev => ({ ...prev, [postId]: true }));
@@ -432,6 +442,32 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
     }
   };
 
+  /* ─── Share Post ─── */
+  const handleShare = async (post: Post) => {
+    const url = `${window.location.origin}/post/${post.id}`;
+    const authorName = post.is_anonymous ? "Agente Anónimo" : (post.profiles?.username || post.profiles?.full_name || "Agente");
+    const title = `Publicación de ${authorName} - Red FBI`;
+    const text = post.content.length > 100 ? post.content.substring(0, 100) + "..." : post.content;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text,
+          url,
+        });
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          navigator.clipboard.writeText(url);
+          showToast("Enlace copiado al portapapeles");
+        }
+      }
+    } else {
+      navigator.clipboard.writeText(url);
+      showToast("Enlace copiado al portapapeles");
+    }
+  };
+
   /* ═══════════════════════════════════════════════════
      RENDER HELPERS
      ═══════════════════════════════════════════════════ */
@@ -608,8 +644,8 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
             </div>
           )}
 
-          {/* New Post Form - Always visible when user is logged in */}
-          {userId && (
+          {/* New Post Form - Only show in regular feed mode */}
+          {userId && !postId && (
             <div className="bg-white rounded-3xl p-5 md:p-6 shadow-sm border border-light-gray mb-8">
               <form onSubmit={handleCreatePost} className="flex flex-col gap-4">
                 <textarea
@@ -645,12 +681,25 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
             </div>
           )}
 
+          {/* Error State */}
+          {error && (
+            <div className="flex flex-col items-center justify-center py-10 px-4 mb-8 bg-red-50 rounded-3xl border border-red-100 text-center">
+              <p className="text-red-600 font-sans font-medium mb-4">{error}</p>
+              <button 
+                onClick={() => fetchPosts()}
+                className="px-6 py-2 bg-navy-dark text-white rounded-full font-sans font-bold text-sm hover:bg-navy-dark/90 transition-all active:scale-95"
+              >
+                Reintentar Carga
+              </button>
+            </div>
+          )}
+
           {/* Posts List */}
           {loading ? (
             <div className="flex justify-center py-16">
               <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : posts.length === 0 ? (
+          ) : posts.length === 0 && !error ? (
             <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-3xl border border-light-gray">
               <div className="w-16 h-16 rounded-full bg-gold/10 flex items-center justify-center mb-4">
                 <MessageCircle size={28} className="text-gold/60" />
@@ -804,6 +853,13 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                       >
                         <MessageSquare size={15} />
                         {(post.total_comments ?? post.comments.length) > 0 && (post.total_comments ?? post.comments.length)}
+                      </button>
+                      <button
+                        onClick={() => handleShare(post)}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all bg-cream hover:bg-gold/10 text-navy-dark/60"
+                        title="Compartir publicación"
+                      >
+                        <Share2 size={15} />
                       </button>
                     </div>
 

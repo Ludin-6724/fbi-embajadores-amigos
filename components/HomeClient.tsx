@@ -93,46 +93,40 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
       );
     }
 
-    switch (activeTab) {
-      case "feed":
-        return (
-          <>
-            <Hero profile={initialProfile} />
-            <Comunidad initialTab="muro" hideTabs={true} />
-            <SubCommunities />
-          </>
-        );
-      case "prayers":
-        return (
-          <>
-            <div className="pt-20 bg-cream"></div>
-            <Comunidad initialTab="oratorio" hideTabs={true} />
-          </>
-        );
-      case "streaks":
-        return (
-          <>
-             <div className="pt-20 bg-cream"></div>
-             <Rachas />
-          </>
-        );
-      case "groups":
-        return (
-          <>
-            <div className="pt-20 bg-white"></div>
-            <SubCommunities />
-          </>
-        );
-      case "profile":
-        return (
-          <>
-            <div className="pt-20 bg-white"></div>
-            <ProfileSection profile={initialProfile} />
-          </>
-        );
-      default:
-        return <Hero profile={initialProfile} />;
-    }
+    return (
+      <div className="flex-1 flex flex-col">
+        {/* TAB: FEED */}
+        <div style={{ display: activeTab === "feed" ? "block" : "none" }}>
+          <Hero profile={initialProfile} />
+          <Comunidad initialTab="muro" hideTabs={true} />
+          <SubCommunities />
+        </div>
+
+        {/* TAB: PRAYERS */}
+        <div style={{ display: activeTab === "prayers" ? "block" : "none" }}>
+          <div className="pt-20 bg-cream"></div>
+          <Comunidad initialTab="oratorio" hideTabs={true} />
+        </div>
+
+        {/* TAB: STREAKS */}
+        <div style={{ display: activeTab === "streaks" ? "block" : "none" }}>
+          <div className="pt-20 bg-cream"></div>
+          <Rachas />
+        </div>
+
+        {/* TAB: GROUPS */}
+        <div style={{ display: activeTab === "groups" ? "block" : "none" }}>
+          <div className="pt-20 bg-white"></div>
+          <SubCommunities />
+        </div>
+
+        {/* TAB: PROFILE */}
+        <div style={{ display: activeTab === "profile" ? "block" : "none" }}>
+          <div className="pt-20 bg-white"></div>
+          <ProfileSection profile={initialProfile} />
+        </div>
+      </div>
+    );
   };
 
   return (
