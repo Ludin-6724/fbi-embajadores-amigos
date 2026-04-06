@@ -356,9 +356,28 @@ export default function Navbar({
             )}
           </div>
 
-          {/* ── Mobile Toggle & Notifications ── */}
-          <div className="md:hidden flex items-center gap-2 z-50">
+          {/* ── Mobile Profile & Notifications ── */}
+          <div className="md:hidden flex items-center gap-3 z-50">
             {user && <NotificationCenter />}
+            {user && (
+              <button
+                onClick={() => {
+                  const event = new CustomEvent("fbi:change-tab", { detail: "profile" });
+                  window.dispatchEvent(event);
+                  // Also trigger scroll to top
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="w-10 h-10 rounded-full overflow-hidden border-2 border-gold/60 active:scale-95 transition-all shadow-sm"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Perfil" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-cream flex items-center justify-center text-gold">
+                    <User size={20} />
+                  </div>
+                )}
+              </button>
+            )}
           </div>
 
           {/* ── Mobile Menu ── */}

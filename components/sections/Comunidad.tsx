@@ -455,11 +455,11 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gold/20 mb-6 text-center relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gold/20 via-gold to-gold/20" />
               <MessageSquare className="mx-auto text-gold mb-3 opacity-50 group-hover:scale-110 transition-transform" size={32} />
-              <h4 className="font-serif text-xl font-bold text-navy-dark mb-2">Oratorio de Intercesión</h4>
+              <h4 className="font-serif text-xl font-bold text-navy-dark mb-2">Oración</h4>
               <p className="font-sans text-navy-dark/70 text-xs italic max-w-sm mx-auto leading-relaxed">
-                "Oren unos por otros, para que sean sanados. La oración del justo es poderosa y eficaz."
+                "Confesaos vuestras ofensas unos a otros, y orad unos por otros, para que seáis sanados. La oración eficaz del justo puede mucho."
               </p>
-              <footer className="mt-2 text-[9px] uppercase font-bold tracking-widest text-gold text-center">Santiago 5:16</footer>
+              <footer className="mt-2 text-[9px] uppercase font-bold tracking-widest text-gold text-center">Santiago 5:16 RVR1960</footer>
             </div>
           )}
 

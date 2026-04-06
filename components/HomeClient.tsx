@@ -41,8 +41,16 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
     const handleOpenPost = () => {
         // If we want to open a v2 selector 
     };
+    const handleChangeTab = (e: any) => {
+        if (e.detail) handleTabChange(e.detail as TabType);
+    };
+
     window.addEventListener("fbi:open-publish-selector", handleOpenPost);
-    return () => window.removeEventListener("fbi:open-publish-selector", handleOpenPost);
+    window.addEventListener("fbi:change-tab", handleChangeTab);
+    return () => {
+        window.removeEventListener("fbi:open-publish-selector", handleOpenPost);
+        window.removeEventListener("fbi:change-tab", handleChangeTab);
+    };
   }, []);
 
   const renderContent = () => {
@@ -95,7 +103,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
         {initialProfile && (
           <DashboardActions 
             profile={initialProfile} 
-            hideVisuals={activeTab !== "feed"} 
+            hideVisuals={true} 
           />
         )}
         {renderContent()}
