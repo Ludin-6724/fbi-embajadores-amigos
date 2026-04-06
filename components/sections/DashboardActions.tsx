@@ -265,7 +265,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
               </button>
             </div>
             
-            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="p-5 sm:p-6 pb-20 sm:pb-10 space-y-4 overflow-y-auto flex-1">
               {activeModal === "selector" ? (
                 <div className="grid grid-cols-1 gap-4 py-4">
                   <button 

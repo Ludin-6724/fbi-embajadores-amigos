@@ -14,6 +14,15 @@ import UpdatePrompt from "@/components/ui/UpdatePrompt";
 
 export default function HomeClient({ initialUser, initialProfile }: { initialUser: any, initialProfile: any }) {
   const [activeTab, setActiveTab] = useState<TabType>("feed");
+  
+  // Sync tab with URL hash on mount and on changes
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "") as TabType;
+    const validTabs: TabType[] = ["feed", "prayers", "streaks", "profile"];
+    if (hash && validTabs.includes(hash)) {
+      setActiveTab(hash);
+    }
+  }, []);
   const dashboardRef = useRef<any>(null);
 
   const handleTabChange = (tab: TabType) => {
@@ -23,6 +32,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
         return;
     }
     setActiveTab(tab);
+    window.location.hash = tab;
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
