@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fbi-amigos-v3';
+const CACHE_NAME = 'fbi-amigos-v4';
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/logo-fbi.jpg',
@@ -54,7 +54,6 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('.png') || 
     url.pathname.endsWith('.svg') || 
     url.pathname.endsWith('.ico') ||
-    url.pathname.endsWith('.json') ||
     url.pathname.includes('manifest')
   ) {
     event.respondWith(
