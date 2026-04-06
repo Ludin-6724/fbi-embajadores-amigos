@@ -82,7 +82,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
 
     if (!error) {
       handleClose();
-      // Optimization: Refresh list via custom event if possible, otherwise reload
       window.dispatchEvent(new CustomEvent("fbi:refresh-feed")); 
       window.location.reload(); 
     } else {
@@ -126,7 +125,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
       : supabase.from("streaks").insert(payload));
 
     if (!streakError) {
-      // Post to wall
       await supabase.from("posts").insert({
         author_id: profile.id,
         content: `🔥 Misión completada - Día ${newDays}!\n\n"${content.trim()}"`,
@@ -140,82 +138,120 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     }
   };
 
+  const handleCommunitySubmit = async () => {
+    const nameInput = document.querySelector('input[name="commName"]') as HTMLInputElement;
+    const descInput = document.querySelector('textarea[name="commDesc"]') as HTMLTextAreaElement;
+
+    if (!nameInput?.value.trim()) {
+      setFormError("El nombre de la comunidad es obligatorio.");
+      return;
+    }
+    if (!profile?.id) {
+      setFormError("No hay sesión activa. Recarga la página e intenta de nuevo.");
+      return;
+    }
+
+    setFormError(null);
+    setSubmitting(true);
+
+    const { data, error } = await supabase
+      .from('communities')
+      .insert({
+        name: nameInput.value.trim(),
+        description: descInput?.value.trim() || null,
+        owner_id: profile.id,
+        is_private: commPrivate
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      await supabase.from('community_members').insert({
+        community_id: data.id,
+        user_id: profile.id,
+        role: 'founder'
+      });
+      handleClose();
+      window.location.reload();
+    } else {
+      setFormError(`Error: ${error?.message ?? "desconocido. Verifica permisos en Supabase."}`);
+      setSubmitting(false);
+    }
+  };
+
   const name = profile?.username || profile?.full_name || "Agente";
 
   return (
     <>
       {!hideVisuals && (
         <section className="bg-white py-12 border-b border-light-gray relative z-20">
-      <div className="container mx-auto px-4 md:px-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-cream p-6 rounded-3xl border border-light-gray shadow-sm mb-8 gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center font-serif font-bold text-2xl text-gold overflow-hidden">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt={name} className="w-full h-full object-cover" />
-              ) : (
-                name[0]?.toUpperCase()
-              )}
-            </div>
-            <div>
-              <p className="font-sans text-sm text-navy-dark/60 font-semibold uppercase tracking-wider">
-                Panel de Control
-              </p>
-              <h2 className="font-serif text-2xl font-bold text-navy-dark">
-                Bienvenido, {name}
-              </h2>
+          <div className="container mx-auto px-4 md:px-8">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-cream p-6 rounded-3xl border border-light-gray shadow-sm mb-8 gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center font-serif font-bold text-2xl text-gold overflow-hidden">
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt={name} className="w-full h-full object-cover" />
+                  ) : (
+                    name[0]?.toUpperCase()
+                  )}
+                </div>
+                <div>
+                  <p className="font-sans text-sm text-navy-dark/60 font-semibold uppercase tracking-wider">
+                    Panel de Control
+                  </p>
+                  <h2 className="font-serif text-2xl font-bold text-navy-dark">
+                    Bienvenido, {name}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button 
+                  onClick={() => setActiveModal("post")}
+                  className="flex items-center gap-2 px-5 py-3 bg-navy-dark hover:bg-navy-dark/90 text-white font-sans font-semibold rounded-full transition-colors text-sm"
+                >
+                  <PenSquare size={18} />
+                  Nueva Publicación
+                </button>
+                <button 
+                  onClick={() => setActiveModal("prayer")}
+                  className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
+                >
+                  <UserMinus size={18} className="text-gold" />
+                  Oración Anónima
+                </button>
+                <button 
+                  onClick={() => {
+                    const el = document.getElementById("rachas");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
+                >
+                  <Flame size={18} className="text-gold" />
+                  Rachas
+                </button>
+                <button 
+                  onClick={() => {
+                    const el = document.getElementById("comunidades");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
+                >
+                  <Users size={18} className="text-gold" />
+                  Sub-Comunidades
+                </button>
+              </div>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button 
-              onClick={() => setActiveModal("post")}
-              className="flex items-center gap-2 px-5 py-3 bg-navy-dark hover:bg-navy-dark/90 text-white font-sans font-semibold rounded-full transition-colors text-sm"
-            >
-              <PenSquare size={18} />
-              Nueva Publicación
-            </button>
-              <button 
-                onClick={() => setActiveModal("prayer")}
-                className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
-              >
-                <UserMinus size={18} className="text-gold" />
-                Oración Anónima
-              </button>
-            <button 
-              onClick={() => {
-                const el = document.getElementById("rachas");
-                if (el) el.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
-            >
-              <Flame size={18} className="text-gold" />
-              Rachas
-            </button>
-            <button 
-               onClick={() => {
-                 const el = document.getElementById("comunidades");
-                 if (el) el.scrollIntoView({ behavior: "smooth" });
-               }}
-              className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
-            >
-              <Users size={18} className="text-gold" />
-              Sub-Comunidades
-            </button>
-          </div>
-        </div>
-      </div>
-
         </section>
       )}
 
-      {/* Modals — Full screen on mobile, centered card on desktop */}
       {activeModal && (
         <div 
           className="fixed inset-0 bg-navy-dark/40 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center animate-fade-in" 
           onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
         >
           <div className="bg-white w-full sm:w-[95%] sm:max-w-lg sm:rounded-3xl rounded-t-3xl shadow-2xl border border-gold/20 max-h-[90vh] flex flex-col">
-            {/* Header — sticky */}
             <div className="flex items-center justify-between p-5 sm:p-6 border-b border-light-gray bg-cream rounded-t-3xl flex-shrink-0">
               <h3 className="font-serif text-lg sm:text-xl font-bold text-navy-dark">
                 {activeModal === "selector" ? "Selecciona una Acción" : 
@@ -229,7 +265,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
               </button>
             </div>
             
-            {/* Body — scrollable */}
             <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
               {activeModal === "selector" ? (
                 <div className="grid grid-cols-1 gap-4 py-4">
@@ -286,11 +321,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                   </button>
                 </div>
               ) : activeModal === "community" ? (
-                <form 
-                  onSubmit={(e) => e.preventDefault()} 
-                  className="space-y-4"
-                >
-                 <div className="space-y-4">
+                <div className="space-y-4">
                    <div>
                      <label className="block text-sm font-sans font-bold text-navy-dark mb-1">Nombre de la Comunidad</label>
                      <input
@@ -309,7 +340,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                        className="w-full min-h-[80px] p-3 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
                      />
                    </div>
-                   {/* Privacidad */}
                    <div>
                      <label className="block text-sm font-sans font-bold text-navy-dark mb-2">Privacidad del grupo</label>
                      <div className="grid grid-cols-2 gap-3">
@@ -337,70 +367,9 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                        </button>
                      </div>
                    </div>
-                 </div>
-
-                 {/* Error visible */}
-                 {formError && (
-                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm font-sans text-red-700">
-                     ⚠️ {formError}
-                   </div>
-                 )}
-
-                 <div className="flex justify-end pt-2">
-                   <button 
-                     type="button" 
-                     onClick={async () => {
-                       const nameInput = document.querySelector('input[name="commName"]') as HTMLInputElement;
-                       const descInput = document.querySelector('textarea[name="commDesc"]') as HTMLTextAreaElement;
-
-                       if (!nameInput?.value.trim()) {
-                         setFormError("El nombre de la comunidad es obligatorio.");
-                         return;
-                       }
-                       if (!profile?.id) {
-                         setFormError("No hay sesión activa. Recarga la página e intenta de nuevo.");
-                         return;
-                       }
-
-                       setFormError(null);
-                       setSubmitting(true);
-
-                       const { data, error } = await supabase
-                         .from('communities')
-                         .insert({
-                           name: nameInput.value.trim(),
-                           description: descInput?.value.trim() || null,
-                           owner_id: profile.id,
-                           is_private: commPrivate
-                         })
-                         .select()
-                         .single();
-
-                       if (!error && data) {
-                         await supabase.from('community_members').insert({
-                           community_id: data.id,
-                           user_id: profile.id,
-                           role: 'founder'
-                         });
-                         handleClose();
-                         window.location.reload();
-                       } else {
-                         setFormError(`Error: ${error?.message ?? "desconocido. Verifica permisos en Supabase."}`);
-                         setSubmitting(false);
-                       }
-                     }}
-                     disabled={submitting}
-                     className="px-6 py-3 bg-gold hover:bg-gold/90 disabled:opacity-50 text-white font-sans font-semibold rounded-full transition-all shadow-md flex items-center gap-2"
-                   >
-                     {submitting ? <Loader2 className="animate-spin" size={18} /> : "Fundar Comunidad"}
-                   </button>
-                 </div>
-                </form>
+                </div>
               ) : (
-                <form 
-                  onSubmit={(e) => activeModal === "streak" ? handleStreakSubmit(e) : handlePostSubmit(e, activeModal === "prayer")} 
-                  className="space-y-4"
-                >
+                <div className="space-y-4">
                  {activeModal === "streak" && (
                     <div className="bg-orange-500/5 p-4 rounded-2xl border border-orange-500/10 flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
@@ -418,7 +387,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                     activeModal === "prayer" ? "Escribe tu petición o testimonio de forma completamente anónima..." :
                     "Reporta tu misión completada. Ej: 'Hoy recordé mi identidad en Cristo y oré 15min'."
                   }
-                  className="w-full min-h-[150px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
+                  className="w-full min-h-[180px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
                   required
                  />
                  {formError && (
@@ -426,19 +395,23 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                      ⚠️ {formError}
                    </div>
                  )}
-                 <div className="flex justify-end pt-4">
-                   <button 
-                     type="submit" 
-                     disabled={submitting || !content.trim()}
-                     className={`px-8 py-4 ${activeModal === "streak" ? "bg-orange-600" : "bg-gold"} hover:opacity-90 disabled:opacity-50 text-white font-sans font-bold rounded-2xl transition-all shadow-md flex items-center gap-2`}
-                   >
-                     {submitting ? <Loader2 className="animate-spin" size={18} /> : 
-                      activeModal === "streak" ? "Registrar y Publicar Racha" : "Publicar Mensaje"}
-                   </button>
-                 </div>
-                </form>
+                </div>
               )}
             </div>
+
+            {activeModal !== "selector" && (
+              <div className="p-5 sm:p-6 border-t border-light-gray bg-white flex justify-end flex-shrink-0 sm:rounded-b-3xl">
+                <button 
+                  onClick={(e) => activeModal === "community" ? handleCommunitySubmit() : (activeModal === "streak" ? handleStreakSubmit(e as any) : handlePostSubmit(e as any, activeModal === "prayer"))}
+                  disabled={activeModal !== "community" && (submitting || !content.trim())}
+                  className={`px-8 py-4 w-full sm:w-auto ${activeModal === "streak" ? "bg-orange-600" : "bg-gold"} hover:opacity-90 disabled:opacity-50 text-white font-sans font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2`}
+                >
+                  {submitting ? <Loader2 className="animate-spin" size={18} /> : 
+                   activeModal === "community" ? "Fundar Comunidad" :
+                   activeModal === "streak" ? "Registrar y Publicar Racha" : "Publicar Mensaje"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

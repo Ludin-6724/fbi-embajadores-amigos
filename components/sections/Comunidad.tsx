@@ -450,8 +450,21 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
             </div>
           )}
 
-          {/* New Post Form - Hidden on mobile context */}
-          {userId && !hideTabs && (
+          {/* New Post Form           {/* Intro Text for Mobile/Clean Views */}
+          {activeTab === "oratorio" && (
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-gold/20 mb-6 text-center relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gold/20 via-gold to-gold/20" />
+              <MessageSquare className="mx-auto text-gold mb-3 opacity-50 group-hover:scale-110 transition-transform" size={32} />
+              <h4 className="font-serif text-xl font-bold text-navy-dark mb-2">Oratorio de Intercesión</h4>
+              <p className="font-sans text-navy-dark/70 text-xs italic max-w-sm mx-auto leading-relaxed">
+                "Oren unos por otros, para que sean sanados. La oración del justo es poderosa y eficaz."
+              </p>
+              <footer className="mt-2 text-[9px] uppercase font-bold tracking-widest text-gold text-center">Santiago 5:16</footer>
+            </div>
+          )}
+
+          {/* New Post Form - Always visible when user is logged in */}
+          {userId && (
             <div className="bg-white rounded-3xl p-5 md:p-6 shadow-sm border border-light-gray mb-8">
               <form onSubmit={handleCreatePost} className="flex flex-col gap-4">
                 <textarea
@@ -468,7 +481,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                 <button
                   type="submit"
                   disabled={!newPostText.trim() || submitting}
-                  className="self-end px-6 py-2 bg-gold hover:bg-gold/90 text-white font-sans font-bold rounded-full transition-all flex items-center gap-2 shadow disabled:opacity-50"
+                  className="self-end px-6 py-2.5 bg-gold hover:bg-gold/90 text-white font-sans font-bold rounded-full transition-all flex items-center gap-2 shadow disabled:opacity-50"
                 >
                   {submitting ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -479,21 +492,8 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
               </form>
             </div>
           )}
-
-          {/* Intro Text for Mobile/Clean Views */}
-          {hideTabs && activeTab === "oratorio" && (
-            <div className="bg-white rounded-3xl p-8 shadow-sm border border-gold/20 mb-8 text-center relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gold/20 via-gold to-gold/20" />
-              <MessageSquare className="mx-auto text-gold mb-4 opacity-50 group-hover:scale-110 transition-transform" size={40} />
-              <h4 className="font-serif text-2xl font-bold text-navy-dark mb-4">Oratorio de Intercesión</h4>
-              <p className="font-sans text-navy-dark/70 text-sm italic max-w-sm mx-auto leading-relaxed">
-                "Oren unos por otros, para que sean sanados. La oración del justo es poderosa y eficaz."
-              </p>
-              <footer className="mt-4 text-[10px] uppercase font-bold tracking-widest text-gold">Santiago 5:16</footer>
-            </div>
-          )}
           
-          {hideTabs && activeTab === "muro" && (
+          {activeTab === "muro" && (
             <div className="mb-8 pt-4">
                <h4 className="font-serif text-2xl font-bold text-navy-dark text-center">Novedades de los Agentes</h4>
                <div className="w-12 h-1 bg-gold mx-auto mt-2 rounded-full" />

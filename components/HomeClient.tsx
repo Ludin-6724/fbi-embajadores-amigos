@@ -78,7 +78,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
         {initialProfile && (
           <DashboardActions 
             profile={initialProfile} 
-            hideVisuals={true} 
+            hideVisuals={activeTab !== "feed"} 
           />
         )}
         {renderContent()}
