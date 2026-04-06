@@ -248,10 +248,10 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
 
       {activeModal && (
         <div 
-          className="fixed inset-0 bg-navy-dark/40 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center animate-fade-in" 
+          className="fixed inset-0 bg-navy-dark/60 backdrop-blur-sm z-[100] flex items-center justify-center animate-fade-in p-4" 
           onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
         >
-          <div className="bg-white w-full h-[95dvh] sm:h-auto sm:w-[95%] sm:max-w-lg sm:rounded-3xl shadow-2xl border border-gold/20 sm:max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in">
+          <div className="bg-white w-full h-auto sm:w-[95%] sm:max-w-lg rounded-3xl shadow-2xl border border-gold/20 max-h-[85vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="flex items-center justify-between p-5 sm:p-6 border-b border-light-gray bg-cream rounded-t-3xl flex-shrink-0">
               <h3 className="font-serif text-lg sm:text-xl font-bold text-navy-dark">
                 {activeModal === "selector" ? "Selecciona una Acción" : 

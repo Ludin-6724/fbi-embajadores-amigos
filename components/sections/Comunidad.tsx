@@ -217,20 +217,21 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
     };
     setPosts(prev => [tempPost, ...prev]);
 
-    const { error } = await supabase.from("posts").insert({
+    const { data: newPostData, error } = await supabase.from("posts").insert({
       author_id: userId,
       content,
       is_anonymous: activeTab === "oratorio",
       community_id: communityId || null,
-    });
+    }).select(POST_SELECT).single();
 
     if (error) {
       showToast("No se pudo publicar: " + error.message, false);
       setPosts(prev => prev.filter(p => p.id !== tempPost.id));
     } else {
       showToast("¡Publicación creada!");
-      // Refresh to get real IDs
-      setTimeout(() => fetchPosts(true), 800);
+      if (newPostData) {
+        setPosts(prev => prev.map(p => p.id === tempPost.id ? (newPostData as unknown as Post) : p));
+      }
     }
     setSubmitting(false);
   };
@@ -266,6 +267,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
   const saveEdit = async (postId: string) => {
     if (!editPostText.trim()) return;
     const newContent = editPostText.trim();
+    const backup = posts;
 
     // Optimistic
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, content: newContent } : p));
@@ -275,7 +277,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
     const { error } = await supabase.from("posts").update({ content: newContent }).eq("id", postId);
     if (error) {
       showToast("No se pudo editar: " + error.message, false);
-      fetchPosts(true);
+      setPosts(backup);
     } else {
       showToast("Publicación editada");
     }
@@ -313,7 +315,10 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
 
       if (error) {
         showToast("Error al quitar reacción", false);
-        fetchPosts(true);
+        setPosts(prev => prev.map(p => {
+          if (p.id !== postId) return p;
+          return { ...p, post_reactions: [...p.post_reactions, existingReaction] };
+        }));
       }
     } else {
       // ADD reaction — optimistic
@@ -328,11 +333,11 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
         return { ...p, post_reactions: [...p.post_reactions, tempReaction] };
       }));
 
-      const { error } = await supabase.from("post_reactions").insert({
+      const { data: newReactionData, error } = await supabase.from("post_reactions").insert({
         post_id: postId,
         user_id: userId,
         reaction: reactionType,
-      });
+      }).select("id, user_id, reaction").single();
 
       if (error) {
         if (error.code === "23505") {
@@ -340,10 +345,15 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
         } else {
           showToast("Error al reaccionar: " + error.message, false);
         }
-        fetchPosts(true);
-      } else {
-        // Sync to get real ID for future toggles
-        setTimeout(() => fetchPosts(true), 600);
+        setPosts(prev => prev.map(p => {
+          if (p.id !== postId) return p;
+          return { ...p, post_reactions: p.post_reactions.filter(r => r.id !== tempReaction.id) };
+        }));
+      } else if (newReactionData) {
+        setPosts(prev => prev.map(p => {
+          if (p.id !== postId) return p;
+          return { ...p, post_reactions: p.post_reactions.map(r => r.id === tempReaction.id ? (newReactionData as ReactionRow) : r) };
+        }));
       }
     }
   };
@@ -372,38 +382,47 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
 
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
-      return { ...p, comments: [...p.comments, tempComment] };
+      return { ...p, comments: [...p.comments, tempComment], total_comments: (p.total_comments || 0) + 1 };
     }));
 
-    const { error } = await supabase.from("comments").insert({
+    const { data: newCommentData, error } = await supabase.from("comments").insert({
       post_id: postId,
       author_id: userId,
       parent_id: replyingTo?.id || null,
       content: text,
-    });
+    }).select(`id, post_id, author_id, parent_id, content, created_at, profiles(username, full_name, avatar_url)`).single();
 
     setReplyingTo(null);
 
     if (error) {
       showToast("No se pudo comentar: " + error.message, false);
-      fetchPosts(true);
-    } else {
-      // Sync to get real IDs
-      setTimeout(() => fetchPosts(true), 600);
+      setPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        return { ...p, comments: p.comments.filter(c => c.id !== tempComment.id), total_comments: Math.max(0, (p.total_comments || 1) - 1) };
+      }));
+    } else if (newCommentData) {
+      setPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        return { ...p, comments: p.comments.map(c => c.id === tempComment.id ? (newCommentData as unknown as CommentRow) : c) };
+      }));
+      setFullComments(prev => {
+        if (!prev[postId]) return prev;
+        return { ...prev, [postId]: prev[postId].map(c => c.id === tempComment.id ? (newCommentData as unknown as CommentRow) : c) };
+      });
     }
   };
 
   const handleDeleteComment = async (postId: string, commentId: string) => {
-    // Optimistic remove
+    const backup = posts;
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
-      return { ...p, comments: p.comments.filter(c => c.id !== commentId) };
+      return { ...p, comments: p.comments.filter(c => c.id !== commentId), total_comments: Math.max(0, (p.total_comments || 1) - 1) };
     }));
 
     const { error } = await supabase.from("comments").delete().eq("id", commentId);
     if (error) {
       showToast("No se pudo eliminar comentario", false);
-      fetchPosts(true);
+      setPosts(backup);
     }
   };
 

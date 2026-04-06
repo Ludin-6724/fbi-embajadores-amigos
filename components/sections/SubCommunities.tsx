@@ -48,27 +48,24 @@ export default function SubCommunities() {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUserId(user?.id ?? null);
 
-    const { data: comms } = await supabase
+    const communitiesQuery = supabase
       .from("communities")
       .select("id, name, description, owner_id, is_official, is_private, invite_code")
       .order("is_official", { ascending: false })
       .order("created_at", { ascending: false });
 
-    setCommunities((comms as Community[]) ?? []);
-
     if (user?.id) {
-      const { data: memberships } = await supabase
-        .from("community_members")
-        .select("community_id, role")
-        .eq("user_id", user.id);
-      setMyMemberships((memberships as MembershipEntry[]) ?? []);
-
-      const { data: pending } = await supabase
-        .from("community_join_requests")
-        .select("community_id")
-        .eq("user_id", user.id)
-        .eq("status", "pending");
-      setMyPending((pending as PendingRequest[]) ?? []);
+      const [commsResult, membershipsResult, pendingResult] = await Promise.all([
+        communitiesQuery,
+        supabase.from("community_members").select("community_id, role").eq("user_id", user.id),
+        supabase.from("community_join_requests").select("community_id").eq("user_id", user.id).eq("status", "pending"),
+      ]);
+      setCommunities((commsResult.data as Community[]) ?? []);
+      setMyMemberships((membershipsResult.data as MembershipEntry[]) ?? []);
+      setMyPending((pendingResult.data as PendingRequest[]) ?? []);
+    } else {
+      const { data: comms } = await communitiesQuery;
+      setCommunities((comms as Community[]) ?? []);
     }
 
     setLoading(false);
@@ -101,7 +98,7 @@ export default function SubCommunities() {
     });
     if (!error) {
       showToast("¡Te uniste exitosamente! 🎉");
-      fetchAll();
+      setMyMemberships(prev => [...prev, { community_id: commId, role: "member" }]);
     }
     setJoiningId(null);
   };
@@ -117,7 +114,7 @@ export default function SubCommunities() {
     const json = await res.json();
     if (res.ok) {
       showToast("✉️ Solicitud enviada. El admin la revisará.");
-      fetchAll();
+      setMyPending(prev => [...prev, { community_id: commId }]);
     } else {
       showToast(`❌ ${json.error}`);
     }
@@ -129,7 +126,7 @@ export default function SubCommunities() {
     const res = await fetch(`/api/communities/${commId}`, { method: "DELETE" });
     if (res.ok) {
       showToast("Grupo disuelto.");
-      fetchAll();
+      setCommunities(prev => prev.filter(c => c.id !== commId));
     } else {
       const json = await res.json();
       showToast(`❌ ${json.error}`);
