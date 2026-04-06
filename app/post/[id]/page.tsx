@@ -69,7 +69,7 @@ export default async function SinglePostPage({ params }: { params: Promise<{ id:
       <Navbar initialUser={user} initialProfile={profile} />
       <main className="flex-1 bg-cream/30 min-h-screen pt-24 pb-20 mt-16 md:mt-0">
         <div className="container mx-auto px-4">
-           <PostClient postId={id} initialUser={user} />
+           <PostClient postId={id} initialUser={user} initialProfile={profile} />
         </div>
       </main>
       <Footer />

@@ -5,7 +5,15 @@ import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, Lock } from "lucide-react";
 import Link from "next/link";
 
-export default function PostClient({ postId, initialUser }: { postId: string, initialUser: any }) {
+export default function PostClient({ 
+  postId, 
+  initialUser,
+  initialProfile 
+}: { 
+  postId: string, 
+  initialUser: any,
+  initialProfile: any
+}) {
   if (!initialUser) {
     return (
       <div className="max-w-2xl mx-auto flex flex-col items-center justify-center py-16 md:py-24 px-6 text-center bg-white rounded-[2.5rem] border border-gold/20 shadow-2xl overflow-hidden relative">
@@ -78,7 +86,12 @@ export default function PostClient({ postId, initialUser }: { postId: string, in
       </div>
 
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <Comunidad postId={postId} hideTabs={true} />
+        <Comunidad 
+          postId={postId} 
+          hideTabs={true} 
+          initialProfile={initialProfile} 
+          isAllowedToFetch={true}
+        />
       </div>
     </div>
   );
