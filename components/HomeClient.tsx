@@ -19,7 +19,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
   // Sync tab with URL hash on mount and on changes
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as TabType;
-    const validTabs: TabType[] = ["feed", "prayers", "streaks", "groups", "profile"];
+    const validTabs: TabType[] = ["feed", "prayers", "streaks", "profile"];
     if (hash && validTabs.includes(hash)) {
       setActiveTab(hash);
     }
@@ -114,11 +114,6 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
           <Rachas />
         </div>
 
-        {/* TAB: GROUPS */}
-        <div style={{ display: activeTab === "groups" ? "block" : "none" }}>
-          <div className="pt-20 bg-white"></div>
-          <SubCommunities />
-        </div>
 
         {/* TAB: PROFILE */}
         <div style={{ display: activeTab === "profile" ? "block" : "none" }}>

@@ -17,8 +17,7 @@ export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarPro
     { id: "prayers" as TabType, icon: Heart, label: "Oración" },
     { id: "publish" as TabType, icon: PlusCircle, label: "Publicar", isCenter: true },
     { id: "streaks" as TabType, icon: Flame, label: "Rachas" },
-    { id: "groups" as TabType, icon: Users, label: "Grupos" },
-    // Profile is moved to Top Navbar for mobile to keep bottom nav symmetrical (5 items)
+    { id: "profile" as TabType, icon: User, label: "Perfil" },
   ];
 
   return (
