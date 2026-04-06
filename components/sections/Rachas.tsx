@@ -46,7 +46,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
       .from("streaks")
       .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name)")
       .order("streak_days", { ascending: false })
-      .limit(5);
+      .limit(15); // Extra to filter "Agente Base" and still have 10
       
     if (communityId) {
       query = query.eq('community_id', communityId);
@@ -55,7 +55,10 @@ export default function Rachas({ communityId }: { communityId?: string }) {
     }
 
     const { data, error } = await query;
-    let streakData = data;
+    let streakData = data ? (data as any).filter((s: any) => 
+      s.profiles?.full_name?.toLowerCase() !== "agente base" && 
+      s.profiles?.username?.toLowerCase() !== "agente base"
+    ).slice(0, 10) : [];
 
     if (error) {
        console.warn("Nuevas columnas de misiones no detectadas, usando fallback:", error.message);
@@ -216,8 +219,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
               Rachas de Agentes Nacional
             </h2>
             <p className="font-sans text-lg text-navy-dark/70 leading-relaxed max-w-xl">
-              Nuestra mayor fuerza es la regularidad. Registra cada día la misión específica 
-              que completaste para transformar tu entorno y encender la <strong className="text-gold">F</strong>e, profundizar en la <strong className="text-gold">B</strong>iblia y reafirmar tu <strong className="text-gold">I</strong>dentidad (FBI).
+              Recuerda hacer algo diferente hoy y marcar tu racha, algo que implique no ser arrastrado por el algoritmo. Cualquier detalle cuenta.
             </p>
           </div>
 
@@ -301,7 +303,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
               <Trophy className="text-gold" />
               Líderes de Constancia Nacional
             </h3>
-            <span className="text-sm font-sans text-navy-dark/60 font-medium bg-cream px-3 py-1 rounded-full">Top 5</span>
+            <span className="text-sm font-sans text-navy-dark/60 font-medium bg-cream px-3 py-1 rounded-full">Top 10</span>
           </div>
 
           {loading ? (
