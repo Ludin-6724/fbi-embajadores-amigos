@@ -193,15 +193,6 @@ export default function Rachas({
 
       if (!reqError) {
         setStatusMsg({ message: "¡Misión registrada con éxito! Tu racha ha subido.", type: 'success' });
-        
-        // Post to the wall
-        await supabase.from("posts").insert({
-          author_id: userId,
-          content: `🔥 Misión completada - Día ${newDays}!\n\n"${missionNote.trim()}"`,
-          is_anonymous: false,
-          community_id: communityId || null
-        });
-
         await fetchData();
         setMissionNote("");
       } else {

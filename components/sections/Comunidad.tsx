@@ -277,20 +277,25 @@ export default function Comunidad({
 
                   {/* Actions */}
                   <div className="flex items-center justify-between pt-3 border-t border-gold/5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <ReactionPicker onSelect={t => handleToggleReaction(post.id, t)} disabled={!userId}>
-                        <button className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${myR ? "bg-gold/10 text-gold" : "bg-cream text-navy-dark/50 hover:bg-gold/5"}`}>
-                          {myR ? <><span className="text-base">{emojiMap[myR]}</span> {myR}</> : "Reaccionar"}
+                        <button className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${myR ? "bg-gold/10 text-gold border border-gold/20" : "bg-cream text-navy-dark/50 hover:bg-gold/5 border border-transparent"}`}>
+                          {myR ? (
+                            <><span className="text-xl leading-none">{emojiMap[myR]}</span><span className="text-xs">{myR}</span></>
+                          ) : (
+                            <span className="text-xs">👍 Reaccionar</span>
+                          )}
                         </button>
                       </ReactionPicker>
+
                       {post.post_reactions.length > 0 && (
-                        <div className="flex items-center gap-1.5 bg-white rounded-full px-2.5 py-1.5 shadow-[0_2px_10px_rgba(212,160,23,0.15)] border border-gold/20">
-                          <div className="flex -space-x-1.5">
+                        <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow-sm border border-gold/15">
+                          <div className="flex items-center gap-1">
                             {Array.from(new Set(post.post_reactions.map(r => r.reaction))).slice(0, 3).map(t => (
-                              <span key={t} className="text-[13px] drop-shadow-sm">{emojiMap[t]}</span>
+                              <span key={t} className="text-xl leading-none">{emojiMap[t]}</span>
                             ))}
                           </div>
-                          <span className="text-[11px] font-bold text-navy-dark/60 ml-0.5">{post.post_reactions.length}</span>
+                          <span className="text-xs font-bold text-navy-dark/60">{post.post_reactions.length}</span>
                         </div>
                       )}
                     </div>
