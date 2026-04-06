@@ -412,10 +412,13 @@ export default function Comunidad({
               <div className="bg-white rounded-3xl p-6 text-center border border-gold/20 shadow-sm mb-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gold/5 rounded-bl-full pointer-events-none" />
                 <h3 className="font-serif text-2xl font-bold text-navy-dark mb-2">Peticiones de Oración</h3>
-                <p className="text-sm text-navy-dark/70 font-sans italic max-w-sm mx-auto leading-relaxed">
+                <p className="text-[12px] text-navy-dark/70 font-sans max-w-sm mx-auto leading-relaxed mb-3">
+                  No hay agentes solitarios, comparte tus luchas y ora por las demás de manera real.
+                </p>
+                <p className="text-sm font-sans italic max-w-sm mx-auto leading-relaxed text-gold font-medium">
                   "Y todo lo que pidiereis en oración, creyendo, lo recibiréis."
                 </p>
-                <p className="text-[10px] font-bold text-gold uppercase tracking-widest mt-3">Mateo 21:22 (RVR1960)</p>
+                <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-widest mt-2">Mateo 21:22 (RVR1960)</p>
               </div>
             )}
 
@@ -432,7 +435,7 @@ export default function Comunidad({
                   <textarea
                     value={inlinePostContent}
                     onChange={e => setInlinePostContent(e.target.value)}
-                    placeholder={activeTab === "muro" ? "¿Qué luz vas a compartir hoy con la comunidad?" : "Escribe tu petición o testimonio de forma anónima..."}
+                    placeholder={activeTab === "muro" ? "¿Qué tienes para compartir hoy agente?" : "Escribe tu petición o testimonio de forma anónima..."}
                     className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none transition-all"
                     rows={inlinePostContent.includes('\n') ? 3 : 1}
                   />

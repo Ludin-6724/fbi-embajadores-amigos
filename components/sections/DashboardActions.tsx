@@ -357,7 +357,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   placeholder={
-                    activeModal === "post" ? "¿Qué luz vas a compartir hoy con la comunidad?" : 
+                    activeModal === "post" ? "¿Qué tienes para compartir hoy agente?" : 
                     activeModal === "prayer" ? "Escribe tu petición o testimonio de forma completamente anónima..." :
                     "Reporta tu misión completada. Ej: 'Hoy recordé mi identidad en Cristo y oré 15min'."
                   }

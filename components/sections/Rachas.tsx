@@ -64,7 +64,7 @@ export default function Rachas({
         .from("streaks")
         .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
         .order("streak_days", { ascending: false })
-        .limit(10);
+        .limit(20);
 
       if (communityId) streaksQuery = streaksQuery.eq('community_id', communityId);
       else streaksQuery = streaksQuery.is('community_id', null);
@@ -78,9 +78,9 @@ export default function Rachas({
 
       if (streaksError) {
         console.warn("Retrying streak fetch:", streaksError.message);
-        const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, user_id, profiles(username)").limit(10);
+        const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, user_id, profiles(username)").limit(20);
         if (fbErr) throw fbErr;
-        setTopStreaks(((fallback as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 5));
+        setTopStreaks(((fallback as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10));
       } else {
         setTopStreaks(((data as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10));
       }
