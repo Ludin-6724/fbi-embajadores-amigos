@@ -39,6 +39,8 @@ export default function Comunidad({
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -102,23 +104,31 @@ export default function Comunidad({
       else setPosts(fetched);
       setLoading(false);
 
-      // Load 2 comment previews per post — fire and forget, non-blocking
+      // Load comments (all if postId is set, otherwise 2 previews per post)
       if (fetched.length > 0) {
         const ids = fetched.map(p => p.id);
-        supabase
+        let q = supabase
           .from("comments")
           .select("id, post_id, content, created_at, profiles(username, avatar_url)")
           .in("post_id", ids)
-          .order("created_at", { ascending: false })
-          .limit(ids.length * 3)
-          .then(({ data: cData }: { data: any }) => {
+          .order("created_at", { ascending: false });
+          
+        if (!postId) {
+          q = q.limit(ids.length * 3);
+        }
+
+        q.then(({ data: cData }: { data: any }) => {
             if (!cData) return;
             const previews: Record<string, CommentPreview[]> = {};
             const counts: Record<string, number> = {};
             for (const c of cData) {
               counts[c.post_id] = (counts[c.post_id] ?? 0) + 1;
               if (!previews[c.post_id]) previews[c.post_id] = [];
-              if (previews[c.post_id].length < 2) previews[c.post_id].push(c);
+              if (!postId) {
+                if (previews[c.post_id].length < 2) previews[c.post_id].push(c);
+              } else {
+                previews[c.post_id].push(c);
+              }
             }
             Object.keys(previews).forEach(k => previews[k].reverse());
             setCommentPreviews(prev => ({ ...prev, ...previews }));
@@ -186,6 +196,36 @@ export default function Comunidad({
         .select("id, user_id, reaction").single() as { data: any };
       if (data) setPosts(prev => prev.map(p => p.id === pId
         ? { ...p, post_reactions: p.post_reactions.map(r => r.id === "temp" ? data : r) } : p));
+    }
+  };
+
+  const handleAddComment = async (pId: string) => {
+    if (!userId) { showToast("Inicia sesión para comentar", false); return; }
+    if (!commentText.trim() || isSubmittingComment) return;
+
+    setIsSubmittingComment(true);
+    try {
+      const { data, error: insertError } = await sbRef.current.from("comments").insert({
+        post_id: pId,
+        author_id: userId,
+        content: commentText.trim()
+      }).select("id, post_id, content, created_at, profiles(username, avatar_url)").single() as { data: any, error: any };
+
+      if (insertError) throw insertError;
+      
+      setCommentPreviews(prev => ({
+        ...prev,
+        [pId]: [...(prev[pId] || []), data]
+      }));
+      setCommentCounts(prev => ({
+        ...prev,
+        [pId]: (prev[pId] || 0) + 1
+      }));
+      setCommentText("");
+    } catch (err: any) {
+      showToast(`Error: ${err.message || "Error al comentar"}`, false);
+    } finally {
+      setIsSubmittingComment(false);
     }
   };
 
@@ -313,30 +353,69 @@ export default function Comunidad({
                     </Link>
                   </div>
 
-                  {/* 2 comment previews */}
-                  {previews.length > 0 && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-50 space-y-2.5">
+                  {/* Comments section */}
+                  {(previews.length > 0 || postId) && (
+                    <div className="px-4 pb-4 pt-4 border-t border-gray-50 space-y-4">
                       {previews.map(c => (
-                        <div key={c.id} className="flex gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-gold border border-gold/20 overflow-hidden">
+                        <div key={c.id} className="flex gap-3">
+                          <div className="w-8 h-8 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
                             {c.profiles?.avatar_url
                               ? <img src={c.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                               : (c.profiles?.username?.[0]?.toUpperCase() ?? "A")}
                           </div>
-                          <div className="flex-1 bg-gray-50 rounded-2xl px-3 py-2">
-                            <p className="text-[11px] font-bold text-navy-dark">{c.profiles?.username || "Agente"}</p>
-                            <p className="text-xs text-navy-dark/80 leading-snug mt-0.5 line-clamp-2">{c.content}</p>
+                          <div className="flex-1 bg-gray-50/80 rounded-2xl px-4 py-2.5">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-[12px] font-bold text-navy-dark">{c.profiles?.username || "Agente"}</p>
+                              {postId && <p className="text-[9px] text-navy-dark/40">{timeAgo(c.created_at)}</p>}
+                            </div>
+                            <p className={`text-xs text-navy-dark/80 leading-relaxed ${!postId ? "line-clamp-2" : "whitespace-pre-wrap"}`}>{c.content}</p>
                           </div>
                         </div>
                       ))}
-                      {extraComments > 0 && (
+                      {!postId && extraComments > 0 && (
                         <Link
                           href={`/post/${post.id}`}
-                          className="flex items-center gap-1 text-[11px] font-bold text-navy-dark/40 hover:text-gold transition-colors pl-9"
+                          className="flex items-center gap-1 text-[11px] font-bold text-navy-dark/40 hover:text-gold transition-colors pl-11 mt-1"
                         >
                           Ver {extraComments} comentario{extraComments !== 1 ? "s" : ""} más
                           <ChevronRight size={11} />
                         </Link>
+                      )}
+
+                      {/* Comment Input Form (Only in Single Post View) */}
+                      {postId && (
+                        <div className="flex gap-2 items-start pt-2 mt-2">
+                          <div className="w-8 h-8 rounded-full bg-cream border border-gold/20 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                            {initialProfile?.avatar_url 
+                              ? <img src={initialProfile.avatar_url} className="w-full h-full object-cover" />
+                              : <Fingerprint size={14} className="text-gold" />
+                            }
+                          </div>
+                          <div className="flex-1 flex flex-col gap-2">
+                             <textarea
+                               value={commentText}
+                               onChange={e => setCommentText(e.target.value)}
+                               placeholder="Escribe un comentario..."
+                               className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none shadow-sm transition-all"
+                               rows={commentText.includes('\n') ? 3 : 1}
+                               onKeyDown={e => {
+                                 if (e.key === 'Enter' && !e.shiftKey) {
+                                   e.preventDefault();
+                                   handleAddComment(post.id);
+                                 }
+                               }}
+                             />
+                             <div className="flex justify-end">
+                               <button 
+                                 onClick={() => handleAddComment(post.id)}
+                                 disabled={isSubmittingComment || !commentText.trim()}
+                                 className="px-5 py-2 bg-navy-dark text-white rounded-full text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 disabled:active:scale-100 active:scale-95 transition-all shadow-md hover:bg-gold hover:text-navy-dark"
+                               >
+                                 {isSubmittingComment ? "Enviando..." : "Comentar"}
+                               </button>
+                             </div>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
