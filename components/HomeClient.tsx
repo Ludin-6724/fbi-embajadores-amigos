@@ -54,6 +54,15 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
     };
   }, []);
 
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabType>>(new Set([activeTab]));
+
+  // Track visited tabs to allow background persistence but stagger initial fetching
+  useEffect(() => {
+    if (!visitedTabs.has(activeTab)) {
+      setVisitedTabs(prev => new Set(prev).add(activeTab));
+    }
+  }, [activeTab, visitedTabs]);
+
   const renderContent = () => {
     if (!initialUser) {
       return (
@@ -94,43 +103,52 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
     }
 
     return (
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col pt-20">
         {/* TAB: FEED */}
-        {activeTab === "feed" && (
+        <div style={{ display: activeTab === "feed" ? "block" : "none" }}>
           <div className="animate-in fade-in duration-500">
             <Hero profile={initialProfile} />
-            <Comunidad initialTab="muro" hideTabs={true} initialProfile={initialProfile} />
+            <Comunidad 
+              initialTab="muro" 
+              hideTabs={true} 
+              initialProfile={initialProfile} 
+              isAllowedToFetch={visitedTabs.has("feed")}
+            />
           </div>
-        )}
+        </div>
 
         {/* TAB: PRAYERS */}
-        {activeTab === "prayers" && (
+        <div style={{ display: activeTab === "prayers" ? "block" : "none" }}>
           <div className="animate-in fade-in duration-500">
-            <div className="pt-20 bg-cream"></div>
-            <Comunidad initialTab="oratorio" hideTabs={true} initialProfile={initialProfile} />
+            <Comunidad 
+              initialTab="oratorio" 
+              hideTabs={true} 
+              initialProfile={initialProfile} 
+              isAllowedToFetch={visitedTabs.has("prayers")}
+            />
           </div>
-        )}
+        </div>
 
         {/* TAB: STREAKS */}
-        {activeTab === "streaks" && (
+        <div style={{ display: activeTab === "streaks" ? "block" : "none" }}>
           <div className="animate-in fade-in duration-500">
-            <div className="pt-20 bg-cream"></div>
-            <Rachas profile={initialProfile} />
+            <Rachas 
+              profile={initialProfile} 
+              isAllowedToFetch={visitedTabs.has("streaks")}
+            />
           </div>
-        )}
+        </div>
 
 
         {/* TAB: PROFILE */}
-        {activeTab === "profile" && (
+        <div style={{ display: activeTab === "profile" ? "block" : "none" }}>
           <div className="animate-in fade-in duration-500">
-            <div className="pt-20 bg-white"></div>
             <ProfileSection profile={initialProfile} />
           </div>
-        )}
+        </div>
       </div>
     );
   };
-
   return (
     <>
       <Navbar initialUser={initialUser} initialProfile={initialProfile} />

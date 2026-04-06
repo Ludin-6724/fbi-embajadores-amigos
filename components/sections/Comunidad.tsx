@@ -48,13 +48,15 @@ export default function Comunidad({
   initialTab = "muro", 
   hideTabs = false, 
   postId,
-  initialProfile
+  initialProfile,
+  isAllowedToFetch = true
 }: { 
   communityId?: string, 
   initialTab?: "muro" | "oratorio", 
   hideTabs?: boolean, 
   postId?: string,
-  initialProfile?: any
+  initialProfile?: any,
+  isAllowedToFetch?: boolean
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,8 +196,10 @@ export default function Comunidad({
   };
 
   useEffect(() => {
-    fetchPosts(false, page > 0);
-  }, [page, activeTab, communityId, postId]);
+    if (isAllowedToFetch) {
+      fetchPosts(false, page > 0);
+    }
+  }, [page, activeTab, communityId, postId, isAllowedToFetch]);
 
   const fetchFullComments = useCallback(async (postId: string) => {
     setFetchingFull(prev => ({ ...prev, [postId]: true }));

@@ -73,8 +73,18 @@ function DivineSymbol() {
 }
 
 export default function HeroCanvas() {
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    // Escalonar la carga pesada del 3D para dar prioridad absoluta al texto y datos
+    const timer = setTimeout(() => setShouldRender(true), 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!shouldRender) return <div className="absolute inset-0 z-0 bg-white" />;
+
   return (
-    <div className="absolute inset-0 z-0 pointer-events-none">
+    <div className="absolute inset-0 z-0 pointer-events-none animate-in fade-in duration-1000">
       <Canvas camera={{ position: [0, 0, 4], fov: 60 }}>
         <ambientLight intensity={1.5} />
         <pointLight position={[10, 10, 10]} />

@@ -31,12 +31,18 @@ export default function UpdatePrompt() {
       }
     };
 
-    // Check on mount
-    checkVersion();
+    // Check after 5s initial delay to prioritize main content loading
+    const initialDelay = setTimeout(() => {
+      checkVersion();
+    }, 5000);
     
     // Check every 30 minutes
     const interval = setInterval(checkVersion, 30 * 60 * 1000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearTimeout(initialDelay);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleUpdate = () => {

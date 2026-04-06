@@ -20,10 +20,12 @@ type Streak = {
 
 export default function Rachas({ 
   communityId,
-  profile
+  profile,
+  isAllowedToFetch = true
 }: { 
   communityId?: string,
-  profile?: any
+  profile?: any,
+  isAllowedToFetch?: boolean
 }) {
   const [topStreaks, setTopStreaks] = useState<Streak[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,8 +43,10 @@ export default function Rachas({
   const supabase = createClient();
 
   useEffect(() => {
-    fetchData();
-  }, [communityId]);
+    if (isAllowedToFetch) {
+      fetchData();
+    }
+  }, [communityId, isAllowedToFetch]);
 
   useEffect(() => {
     if (statusMsg) {
