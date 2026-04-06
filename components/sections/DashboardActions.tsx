@@ -7,9 +7,10 @@ import { createClient } from "@/lib/supabase/client";
 type DashboardActionsProps = {
   profile: any;
   isCommunity?: boolean;
+  hideVisuals?: boolean;
 };
 
-export default function DashboardActions({ profile, isCommunity = false }: DashboardActionsProps) {
+export default function DashboardActions({ profile, isCommunity = false, hideVisuals = false }: DashboardActionsProps) {
   const [activeModal, setActiveModal] = useState<"post" | "prayer" | "community" | null>(null);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -26,9 +27,19 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
   };
 
   useEffect(() => {
-    const handleOpenModal = () => setActiveModal("community");
-    window.addEventListener("fbi:open-community-modal", handleOpenModal);
-    return () => window.removeEventListener("fbi:open-community-modal", handleOpenModal);
+    const handleOpenCommunity = () => setActiveModal("community");
+    const handleOpenPost = () => setActiveModal("post");
+    const handleOpenPrayer = () => setActiveModal("prayer");
+
+    window.addEventListener("fbi:open-community-modal", handleOpenCommunity);
+    window.addEventListener("fbi:open-post-modal", handleOpenPost);
+    window.addEventListener("fbi:open-prayer-modal", handleOpenPrayer);
+
+    return () => {
+      window.removeEventListener("fbi:open-community-modal", handleOpenCommunity);
+      window.removeEventListener("fbi:open-post-modal", handleOpenPost);
+      window.removeEventListener("fbi:open-prayer-modal", handleOpenPrayer);
+    };
   }, []);
 
   const handlePostSubmit = async (e: React.FormEvent, isAnonymous: boolean) => {
@@ -55,7 +66,9 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
   const name = profile?.username || profile?.full_name || "Agente";
 
   return (
-    <section className="bg-white py-12 border-b border-light-gray relative z-20">
+    <>
+      {!hideVisuals && (
+        <section className="bg-white py-12 border-b border-light-gray relative z-20">
       <div className="container mx-auto px-4 md:px-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-cream p-6 rounded-3xl border border-light-gray shadow-sm mb-8 gap-6">
           <div className="flex items-center gap-4">
@@ -274,6 +287,8 @@ export default function DashboardActions({ profile, isCommunity = false }: Dashb
           </div>
         </div>
       )}
-    </section>
+        </section>
+      )}
+    </>
   );
 }

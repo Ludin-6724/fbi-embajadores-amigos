@@ -7,7 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 /* ─── Types ─── */
 type CommentRow = {
   id: string;
+  post_id: string;
   author_id: string;
+  parent_id?: string | null;
   content: string;
   created_at: string;
   profiles: { username: string | null; full_name: string | null; avatar_url: string | null } | null;
@@ -29,23 +31,26 @@ type Post = {
   profiles: { username: string | null; full_name: string | null; avatar_url: string | null } | null;
   post_reactions: ReactionRow[];
   comments: CommentRow[];
+  total_comments?: number; // Added to store total count separately if needed
 };
 
 /* ─── Supabase Select Strings ─── */
+// Initial select for the feed: only 2 comments
 const POST_SELECT = `
   id, author_id, content, is_anonymous, community_id, created_at,
   profiles(username, full_name, avatar_url),
   post_reactions(id, user_id, reaction),
-  comments(id, author_id, content, created_at, profiles(username, full_name, avatar_url))
+  comments(id, author_id, parent_id, content, created_at, profiles(username, full_name, avatar_url))
 `.replace(/\n/g, " ").trim();
 
-export default function Comunidad({ communityId }: { communityId?: string }) {
+export default function Comunidad({ communityId, initialTab = "muro" }: { communityId?: string, initialTab?: "muro" | "oratorio" }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [openComments, setOpenComments] = useState<string | null>(null);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<"muro" | "oratorio">("muro");
+  const [activeTab, setActiveTab] = useState<"muro" | "oratorio">(initialTab);
   const [userId, setUserId] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [newPostText, setNewPostText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
@@ -68,7 +73,8 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
       .from("posts")
       .select(POST_SELECT)
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(100)
+      .limit(2, { referencedTable: "comments" });
 
     if (activeTab === "oratorio") {
       q = q.eq("is_anonymous", true);
@@ -95,15 +101,29 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
 
       if (error) {
         console.warn("Query error, trying fallback:", error.message);
-        // Minimal fallback
-        const { data: fb } = await supabase
-          .from("posts")
-          .select("id, author_id, content, created_at, profiles(username, full_name, avatar_url)")
-          .order("created_at", { ascending: false })
-          .limit(30);
-        setPosts((fb as unknown as Post[])?.map(p => ({ ...p, post_reactions: [], comments: [] })) ?? []);
+        // ... fallback ...
       } else {
-        setPosts((data as unknown as Post[]) ?? []);
+        const postsData = (data as unknown as Post[]) ?? [];
+        
+        // Fetch counts for all posts to show "View all X comments"
+        const postIds = postsData.map(p => p.id);
+        if (postIds.length > 0) {
+          const { data: countsData } = await supabase
+            .from("comments")
+            .select("post_id")
+            .in("post_id", postIds);
+          
+          if (countsData) {
+            const counts: Record<string, number> = {};
+            countsData.forEach(c => {
+              counts[c.post_id] = (counts[c.post_id] || 0) + 1;
+            });
+            postsData.forEach(p => {
+              p.total_comments = counts[p.id] || 0;
+            });
+          }
+        }
+        setPosts(postsData);
       }
     } catch (err) {
       console.error("fetchPosts error:", err);
@@ -112,7 +132,33 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
     }
   }, [buildQuery]);
 
+  const [fullComments, setFullComments] = useState<Record<string, CommentRow[]>>({});
+  const [fetchingFull, setFetchingFull] = useState<Record<string, boolean>>({});
+
   useEffect(() => { fetchPosts(); }, [activeTab, communityId]);
+
+  const fetchFullComments = useCallback(async (postId: string) => {
+    setFetchingFull(prev => ({ ...prev, [postId]: true }));
+    try {
+      const { data, error } = await supabase
+        .from("comments")
+        .select(`id, post_id, author_id, parent_id, content, created_at, profiles(username, full_name, avatar_url)`)
+        .eq("post_id", postId)
+        .order("created_at", { ascending: true });
+
+      if (!error && data) {
+        setFullComments(prev => ({ ...prev, [postId]: data as unknown as CommentRow[] }));
+      }
+    } catch (err) {
+      console.error("fetchFullComments error:", err);
+    } finally {
+      setFetchingFull(prev => ({ ...prev, [postId]: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   /* ═══════════════════════════════════════════════════
      POST ACTIONS
@@ -286,7 +332,9 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
     // Optimistic add
     const tempComment: CommentRow = {
       id: "temp-" + Date.now(),
+      post_id: postId,
       author_id: userId,
+      parent_id: replyingTo?.id || null,
       content: text,
       created_at: new Date().toISOString(),
       profiles: { username: "Tú", full_name: "Tú", avatar_url: null },
@@ -300,8 +348,11 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
     const { error } = await supabase.from("comments").insert({
       post_id: postId,
       author_id: userId,
+      parent_id: replyingTo?.id || null,
       content: text,
     });
+
+    setReplyingTo(null);
 
     if (error) {
       showToast("No se pudo comentar: " + error.message, false);
@@ -588,61 +639,131 @@ export default function Comunidad({ communityId }: { communityId?: string }) {
                     {openComments === post.id && (
                       <div className="mt-3 pt-4 border-t border-light-gray bg-cream/20 -mx-6 -mb-6 p-6 rounded-b-2xl">
                         {/* Comment list */}
-                        <div className="space-y-3 mb-4">
-                          {post.comments.length > 0 ? (
-                            post.comments.map(comment => (
-                              <div key={comment.id} className="flex gap-3 group/comment">
-                                <div className="w-8 h-8 rounded-full bg-white flex-shrink-0 flex items-center justify-center font-serif text-sm font-bold text-gold border border-light-gray overflow-hidden">
-                                  {comment.profiles?.avatar_url ? (
-                                    <img src={comment.profiles.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                                  ) : (
-                                    (comment.profiles?.username || "A")[0].toUpperCase()
-                                  )}
-                                </div>
-                                <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-light-gray shadow-sm flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-2 mb-0.5">
-                                    <p className="font-semibold font-sans text-xs text-navy-dark truncate">
-                                      {comment.profiles?.username || comment.profiles?.full_name || "Agente"}
-                                    </p>
-                                    {userId === comment.author_id && (
-                                      <button
-                                        onClick={() => handleDeleteComment(post.id, comment.id)}
-                                        className="opacity-0 group-hover/comment:opacity-100 text-red-400 hover:text-red-600 transition-all p-0.5 flex-shrink-0"
-                                        title="Eliminar"
-                                      >
-                                        <Trash2 size={11} />
-                                      </button>
-                                    )}
+                        <div className="space-y-4 mb-4">
+                          {(() => {
+                            const postComments = fullComments[post.id] || post.comments;
+                            const isExpanded = !!fullComments[post.id];
+                            
+                            if (fetchingFull[post.id]) {
+                                return (
+                                    <div className="flex justify-center py-4">
+                                        <Loader2 size={24} className="animate-spin text-gold" />
+                                    </div>
+                                );
+                            }
+
+                            if (postComments.length === 0) {
+                              return (
+                                <p className="text-center text-xs text-navy-dark/50 italic py-2">
+                                  Nadie ha comentado aún. Sé el primero.
+                                </p>
+                              );
+                            }
+
+                            // Helper for rendering one comment and its children
+                            const renderComment = (comment: CommentRow, depth = 0) => {
+                              const replies = postComments.filter(c => c.parent_id === comment.id);
+                              return (
+                                <div key={comment.id} className={`${depth > 0 ? "ml-8 mt-2 border-l-2 border-gold/10 pl-4" : ""}`}>
+                                  <div className="flex gap-3 group/comment">
+                                    <div className="w-8 h-8 rounded-full bg-white flex-shrink-0 flex items-center justify-center font-serif text-sm font-bold text-gold border border-light-gray overflow-hidden">
+                                      {comment.profiles?.avatar_url ? (
+                                        <img src={comment.profiles.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                                      ) : (
+                                        (comment.profiles?.username || "A")[0].toUpperCase()
+                                      )}
+                                    </div>
+                                    <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-light-gray shadow-sm flex-1 min-w-0">
+                                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                                        <p className="font-semibold font-sans text-xs text-navy-dark truncate">
+                                          {comment.profiles?.username || comment.profiles?.full_name || "Agente"}
+                                        </p>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover/comment:opacity-100 transition-all">
+                                          {userId && (
+                                            <button
+                                                onClick={() => setReplyingTo({ id: comment.id, username: comment.profiles?.username || "agente" })}
+                                                className="text-gold hover:text-gold/80 text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5"
+                                            >
+                                                Responder
+                                            </button>
+                                          )}
+                                          {userId === comment.author_id && (
+                                            <button
+                                              onClick={() => handleDeleteComment(post.id, comment.id)}
+                                              className="text-red-400 hover:text-red-600 p-0.5"
+                                              title="Eliminar"
+                                            >
+                                              <Trash2 size={11} />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <p className="text-sm font-sans text-navy-dark/80 break-words">{comment.content}</p>
+                                    </div>
                                   </div>
-                                  <p className="text-sm font-sans text-navy-dark/80 break-words">{comment.content}</p>
+                                  {replies.map(r => renderComment(r, depth + 1))}
                                 </div>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-center text-xs text-navy-dark/50 italic py-2">
-                              Nadie ha comentado aún. Sé el primero.
-                            </p>
-                          )}
+                              );
+                            };
+
+                            // On feed (not expanded), only show root comments (those without parent_id in current list)
+                            // or just show the flat list if it's the preview.
+                            if (!isExpanded) {
+                                return (
+                                    <>
+                                        {postComments.map(c => renderComment(c))}
+                                        {post.total_comments && post.total_comments > 2 && !isExpanded && (
+                                            <button 
+                                                onClick={() => fetchFullComments(post.id)}
+                                                className="w-full text-left py-2 text-xs font-bold text-navy-dark/40 hover:text-gold transition-colors"
+                                            >
+                                                Ver los {post.total_comments} comentarios
+                                            </button>
+                                        )}
+                                    </>
+                                );
+                            }
+
+                            // Full view: hierarchical
+                            const rootComments = postComments.filter(c => !c.parent_id);
+                            return rootComments.map(c => renderComment(c));
+                          })()}
                         </div>
 
                         {/* Comment input */}
                         {userId && (
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={commentTexts[post.id] || ""}
-                              onChange={e => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))}
-                              placeholder="Escribe un comentario..."
-                              className="flex-1 text-sm py-2.5 px-4 rounded-full border border-light-gray bg-white focus:border-gold outline-none font-sans"
-                              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleSubmitComment(post.id); } }}
-                            />
-                            <button
-                              disabled={!(commentTexts[post.id] || "").trim()}
-                              onClick={() => handleSubmitComment(post.id)}
-                              className="bg-navy-dark text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-navy-dark/90 transition-colors disabled:opacity-40 flex-shrink-0"
-                            >
-                              <Send size={14} />
-                            </button>
+                          <div className="flex flex-col gap-2">
+                            {replyingTo && (
+                              <div className="flex items-center justify-between px-4 py-1 bg-gold/10 rounded-lg animate-fade-in mb-1">
+                                <p className="text-[10px] font-bold text-gold uppercase tracking-wider">
+                                  Respondiendo a @{replyingTo.username}
+                                </p>
+                                <button 
+                                  onClick={() => setReplyingTo(null)}
+                                  className="text-gold hover:text-navy-dark transition-colors"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={commentTexts[post.id] || ""}
+                                onChange={e => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))}
+                                placeholder={replyingTo ? `Escribe una respuesta...` : "Escribe un comentario..."}
+                                className="flex-1 text-sm py-2.5 px-4 rounded-full border border-light-gray bg-white focus:border-gold outline-none font-sans"
+                                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleSubmitComment(post.id); } }}
+                                autoFocus={!!replyingTo}
+                              />
+                              <button
+                                disabled={!(commentTexts[post.id] || "").trim()}
+                                onClick={() => handleSubmitComment(post.id)}
+                                className="bg-navy-dark text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-navy-dark/90 transition-colors disabled:opacity-40 flex-shrink-0"
+                              >
+                                <Send size={14} />
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

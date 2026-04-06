@@ -359,13 +359,6 @@ export default function Navbar({
           {/* ── Mobile Toggle & Notifications ── */}
           <div className="md:hidden flex items-center gap-2 z-50">
             {user && <NotificationCenter />}
-            <button
-              className="text-navy-dark p-2"
-              onClick={() => setIsOpen(!isOpen)}
-              aria-label="Toggle menu"
-            >
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
           </div>
 
           {/* ── Mobile Menu ── */}

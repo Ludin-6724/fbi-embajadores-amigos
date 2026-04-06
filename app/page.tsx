@@ -1,11 +1,5 @@
-import Hero from "@/components/sections/Hero";
-import DashboardActions from "@/components/sections/DashboardActions";
-import Comunidad from "@/components/sections/Comunidad";
-import Rachas from "@/components/sections/Rachas";
-import SubCommunities from "@/components/sections/SubCommunities";
-import Navbar from "@/components/ui/Navbar";
-import Footer from "@/components/ui/Footer";
 import { createClient } from "@/lib/supabase/server";
+import HomeClient from "@/components/HomeClient";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -24,16 +18,6 @@ export default async function Home() {
   }
 
   return (
-    <>
-      <Navbar initialUser={user} initialProfile={profile} />
-      <main className="flex-1 flex flex-col bg-white">
-        <Hero profile={profile} />
-        {profile && <DashboardActions profile={profile} isCommunity={false} />}
-        <Comunidad />
-        <Rachas />
-        <SubCommunities />
-      </main>
-      <Footer />
-    </>
+    <HomeClient initialUser={user} initialProfile={profile} />
   );
 }

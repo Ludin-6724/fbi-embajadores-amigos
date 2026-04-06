@@ -9,7 +9,7 @@
   "theme_color": "#0A1128",
   "orientation": "portrait",
   "scope": "/",
-  "prefer_related_applications": false,
+  "categories": ["social", "lifestyle", "productivity"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -32,16 +32,30 @@
   ],
   "screenshots": [
     {
-      "src": "/logo-amigos.jpg",
-      "sizes": "512x512",
-      "type": "image/jpeg",
-      "form_factor": "wide"
+      "src": "/comunidad-bg.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Muro de la Comunidad"
     },
     {
       "src": "/logo-amigos.jpg",
       "sizes": "512x512",
       "type": "image/jpeg",
-      "form_factor": "narrow"
+      "form_factor": "wide",
+      "label": "FBI Embajadores"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Muro Principal",
+      "url": "/#comunidad",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mi Perfil",
+      "url": "/#perfil",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
