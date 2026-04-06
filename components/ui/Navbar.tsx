@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Menu, X, LogOut, User, PenLine, Users, ChevronRight,
-  Loader2, Check, Shield, Bell
+  Loader2, Check, Shield, Home, Heart, PlusCircle, Flame
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import NotificationCenter from "./NotificationCenter";
@@ -168,10 +168,34 @@ export default function Navbar({
   const displayName = profile?.username || user?.user_metadata?.full_name || "Agente";
   const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url;
 
-  const navLinks = [
-    { name: "La Misión", href: "#mision" },
-    { name: "Comunidad", href: "#comunidad" },
-    { name: "Rachas", href: "#rachas" },
+  const [activeDesktopTab, setActiveDesktopTab] = useState<string>("feed");
+
+  // Listen to hash changes to keep desktop tab state in sync
+  useEffect(() => {
+    const syncTab = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (["feed","prayers","streaks","profile"].includes(hash)) setActiveDesktopTab(hash);
+    };
+    syncTab();
+    window.addEventListener("hashchange", syncTab);
+    return () => window.removeEventListener("hashchange", syncTab);
+  }, []);
+
+  const changeTab = (tab: string) => {
+    setActiveDesktopTab(tab);
+    if (tab === "publish") {
+      window.dispatchEvent(new CustomEvent("fbi:open-publish-selector"));
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("fbi:change-tab", { detail: tab }));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const desktopTabs = [
+    { id: "feed", icon: Home, label: "Muro" },
+    { id: "prayers", icon: Heart, label: "Oración" },
+    { id: "publish", icon: PlusCircle, label: "Publicar" },
+    { id: "streaks", icon: Flame, label: "Rachas" },
   ];
 
   /* ── Dropdown menu items ── */
@@ -224,14 +248,35 @@ export default function Navbar({
             />
           </Link>
 
-          {/* ── Desktop Nav (Simplified for Unified Navigation) ── */}
-          <div className="hidden md:flex items-center space-x-12">
-            {/* The primary navigation is now handled by the BottomNavbar on all devices for parity */}
-
+          {/* ── Desktop Nav — Unified Tabs ── */}
+          <div className="hidden md:flex items-center gap-1">
             {user ? (
-              <div className="flex items-center gap-2">
+              <>
+                {/* Tab buttons */}
+                {desktopTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeDesktopTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => changeTab(tab.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
+                        isActive
+                          ? "bg-navy-dark text-white shadow-md"
+                          : "text-navy-dark/60 hover:text-navy-dark hover:bg-cream"
+                      )}
+                    >
+                      <Icon size={15} />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+
+                <div className="w-px h-5 bg-navy-dark/10 mx-2" />
+
                 <NotificationCenter userId={user?.id || initialUser?.id} />
-                
+
                 <div className="relative" ref={dropdownRef}>
                   {/* Avatar trigger */}
                   <button
@@ -337,15 +382,15 @@ export default function Navbar({
                   </div>
                 )}
               </div>
-            </div>
-          ) : (
-              <button
-                onClick={handleLogin}
-                className="bg-gold hover:bg-gold/90 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all shadow-md hover:shadow-lg flex items-center gap-2"
-              >
-                <User size={16} /> Iniciar Sesión
-              </button>
-            )}
+            </>
+            ) : (
+                <button
+                  onClick={handleLogin}
+                  className="bg-gold hover:bg-gold/90 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                >
+                  <User size={16} /> Iniciar Sesión
+                </button>
+              )}
           </div>
 
           {/* ── Mobile Notifications ── */}
@@ -375,16 +420,19 @@ export default function Navbar({
                 </div>
               )}
 
-              {navLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className="text-xl font-serif font-medium text-navy-dark hover:text-gold transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  {link.name}
-                </Link>
-              ))}
+              {desktopTabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setIsOpen(false); changeTab(tab.id); }}
+                    className="flex items-center gap-3 text-xl font-serif font-medium text-navy-dark hover:text-gold transition-colors"
+                  >
+                    <Icon size={20} className="text-gold" />
+                    {tab.label}
+                  </button>
+                );
+              })}
 
               {user ? (
                 <div className="flex flex-col items-center gap-3 mt-6 w-full max-w-xs">
