@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Flame, Trophy, CheckCircle, Loader2, Target, PenTool } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import confetti from "canvas-confetti";
 
 type Streak = {
   streak_days: number;
@@ -257,6 +258,14 @@ export default function Rachas({ communityId }: { communityId?: string }) {
       if (!error) {
         setCheeredIds(prev => new Set(prev).add(target.user_id));
         setStatusMsg({ message: `¡Ánimo enviado a ${target.profiles?.full_name || 'Agente'}!`, type: 'success' });
+        
+        // Trigger Fire Confetti!
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#D4A017', '#FF4500', '#FFA500', '#101726']
+        });
       } else {
         throw error;
       }
