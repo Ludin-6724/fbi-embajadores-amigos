@@ -293,32 +293,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                       <p className="font-sans text-xs text-navy-dark/60 italic">Oración confidencial para el oratorio</p>
                     </div>
                   </button>
-
-                  <button 
-                    onClick={() => setActiveModal("streak")}
-                    className="flex items-center gap-4 p-5 bg-orange-500/5 border border-orange-500/10 rounded-3xl hover:bg-orange-500/10 transition-all text-left group"
-                  >
-                    <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">
-                      <Flame size={24} />
-                    </div>
-                    <div>
-                      <h4 className="font-serif font-bold text-navy-dark text-lg">Reportar Misión FBI</h4>
-                      <p className="font-sans text-xs text-navy-dark/60 italic">Sube tu racha diaria de constancia</p>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => setActiveModal("community")}
-                    className="flex items-center gap-4 p-5 bg-navy-dark/5 border border-navy-dark/10 rounded-3xl hover:bg-navy-dark/10 transition-all text-left group"
-                  >
-                    <div className="w-12 h-12 rounded-2xl bg-navy-dark/10 flex items-center justify-center text-navy-dark group-hover:scale-110 transition-transform">
-                      <Users size={24} />
-                    </div>
-                    <div>
-                      <h4 className="font-serif font-bold text-navy-dark text-lg">Fundar Comunidad</h4>
-                      <p className="font-sans text-xs text-navy-dark/60 italic">Crea un nuevo grupo o ministerio</p>
-                    </div>
-                  </button>
                 </div>
               ) : activeModal === "community" ? (
                 <div className="space-y-4">

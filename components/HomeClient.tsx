@@ -99,7 +99,8 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
         <div style={{ display: activeTab === "feed" ? "block" : "none" }}>
           <Hero profile={initialProfile} />
           <Comunidad initialTab="muro" hideTabs={true} />
-          <SubCommunities />
+          {/* Sub-comunidades ocultas temporalmente para otra versión */}
+          {/* <SubCommunities /> */}
         </div>
 
         {/* TAB: PRAYERS */}
