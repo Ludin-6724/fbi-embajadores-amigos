@@ -20,7 +20,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     return { title: "Publicación no encontrada - Red FBI" };
   }
 
-  const authorName = post.is_anonymous ? "Agente Anónimo" : (post.profiles?.username || post.profiles?.full_name || "Agente");
+  // Handle profiles as potentially an array (Supabase join type inference)
+  const profile = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles;
+  const authorName = post.is_anonymous 
+    ? "Agente Anónimo" 
+    : (profile?.username || profile?.full_name || "Agente");
+  
   const description = post.content.substring(0, 160) + (post.content.length > 160 ? "..." : "");
 
   return {
@@ -30,7 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       title: `Publicación de ${authorName}`,
       description,
       type: "article",
-      images: post.profiles?.avatar_url ? [post.profiles.avatar_url] : ["/logo-fbi.jpg"],
+      images: profile?.avatar_url ? [profile.avatar_url] : ["/logo-fbi.jpg"],
     },
     twitter: {
       card: "summary",
