@@ -3,6 +3,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import PWAProvider from "@/components/providers/PWAProvider";
 import UpdateBanner from "@/components/providers/UpdateBanner";
+import GlobalInstallPrompt from "@/components/ui/GlobalInstallPrompt";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -41,6 +42,7 @@ export default function RootLayout({
         <PWAProvider>
           {children}
           <UpdateBanner />
+          <GlobalInstallPrompt />
         </PWAProvider>
       </body>
     </html>

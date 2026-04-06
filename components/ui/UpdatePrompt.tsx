@@ -59,14 +59,14 @@ export default function UpdatePrompt() {
     <>
       {/* Update Notification */}
       {show && (
-        <div className="fixed bottom-24 left-4 right-4 z-[200] max-w-sm mx-auto animate-bounce-in">
-          <div className="bg-navy-dark text-white p-4 rounded-2xl shadow-2xl border border-gold/30 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gold/20 flex items-center justify-center flex-shrink-0">
-                <RefreshCw className="text-gold animate-spin-slow" size={24} />
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-sm animate-bounce-in">
+          <div className="bg-navy-dark text-white p-4 rounded-2xl shadow-2xl border border-gold/30 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center flex-shrink-0">
+                <RefreshCw className="text-gold animate-spin-slow" size={20} />
             </div>
-            <div className="flex-1">
-                <p className="font-serif font-bold text-sm leading-tight">Nueva versión disponible</p>
-                <p className="font-sans text-[11px] text-white/70">Instala las mejoras de hoy.</p>
+            <div className="flex-1 min-w-0">
+                <p className="font-serif font-bold text-xs leading-tight">Nueva versión disponible</p>
+                <p className="font-sans text-[10px] text-white/70 truncate tracking-tight">Pulsa para instalar mejoras.</p>
             </div>
             <button 
                 onClick={handleUpdate}
