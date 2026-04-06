@@ -11,6 +11,7 @@ import BottomNavbar, { TabType } from "@/components/ui/BottomNavbar";
 import ProfileSection from "@/components/sections/ProfileSection";
 import SubCommunities from "@/components/sections/SubCommunities";
 import UpdatePrompt from "@/components/ui/UpdatePrompt";
+import { createClient } from "@/lib/supabase/client";
 
 export default function HomeClient({ initialUser, initialProfile }: { initialUser: any, initialProfile: any }) {
   const [activeTab, setActiveTab] = useState<TabType>("feed");
@@ -54,6 +55,41 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
   }, []);
 
   const renderContent = () => {
+    if (!initialUser) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 text-center bg-cream/30 pt-20">
+          <div className="w-24 h-24 bg-gold/10 rounded-full flex items-center justify-center mb-6 border border-gold/20 shadow-inner">
+            <img src="/logo-fbi.jpg" alt="FBI" className="w-16 h-16 object-contain mix-blend-multiply opacity-80" />
+          </div>
+          <h2 className="font-serif text-3xl font-bold text-navy-dark mb-4">Acceso Reservado</h2>
+          <p className="font-sans text-navy-dark/60 max-w-sm mb-8 leading-relaxed">
+            Esta plataforma es exclusiva para los **Agentes de FBI Embajadores**. 
+            Inicia sesión para ver las novedades, peticiones de oración y rachas de la comunidad.
+          </p>
+          <button
+            onClick={() => {
+                const supabase = createClient();
+                supabase.auth.signInWithOAuth({
+                  provider: "google",
+                  options: { redirectTo: `${window.location.origin}/auth/callback` },
+                });
+            }}
+            className="px-8 py-4 bg-navy-dark text-white font-sans font-bold rounded-full shadow-xl hover:bg-navy-dark/90 transition-all flex items-center gap-3 active:scale-95"
+          >
+            <img src="https://www.google.com/favicon.ico" alt="G" className="w-4 h-4 brightness-0 invert" />
+            Acceder como Agente
+          </button>
+          
+          <div className="mt-12 p-4 bg-white/50 rounded-2xl border border-gold/10 max-w-xs">
+            <p className="text-[10px] uppercase font-bold tracking-widest text-gold mb-1">Privacidad Total</p>
+            <p className="text-[11px] text-navy-dark/40 font-sans italic">
+              "Confesaos vuestras ofensas unos a otros..." - Santiago 5:16
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case "feed":
         return (
@@ -111,7 +147,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
       <div className="hidden md:block">
         <Footer />
       </div>
-      <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} />
+      {initialUser && <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} />}
       <UpdatePrompt />
     </>
   );

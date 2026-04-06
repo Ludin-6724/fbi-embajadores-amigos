@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { RefreshCw, X, Download, Share } from "lucide-react";
 
-const APP_VERSION = "2.0.7"; // Local version
+const APP_VERSION = "2.0.8"; // Local version
 
 export default function UpdatePrompt() {
   const [show, setShow] = useState(false);

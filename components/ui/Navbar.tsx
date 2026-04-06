@@ -226,7 +226,7 @@ export default function Navbar({
 
           {/* ── Desktop Nav ── */}
           <div className="hidden md:flex items-center space-x-8">
-            {navLinks.map((link) => (
+            {user && navLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}

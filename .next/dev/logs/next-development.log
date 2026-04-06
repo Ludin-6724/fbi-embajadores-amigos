@@ -203,3 +203,9 @@
 {"timestamp":"01:00:59.125","source":"Server","level":"LOG","message":"✓ Compiled in 15ms"}
 {"timestamp":"01:05:58.234","source":"Server","level":"LOG","message":"✓ Compiled in 31ms"}
 {"timestamp":"01:06:03.642","source":"Server","level":"LOG","message":"✓ Compiled in 14ms"}
+{"timestamp":"01:08:23.015","source":"Server","level":"LOG","message":"✓ Compiled in 28ms"}
+{"timestamp":"01:08:23.513","source":"Browser","level":"LOG","message":"THREE.WebGLRenderer: Context Lost."}
+{"timestamp":"01:08:23.517","source":"Browser","level":"LOG","message":"THREE.WebGLRenderer: Context Lost."}
+{"timestamp":"01:08:30.936","source":"Server","level":"LOG","message":"✓ Compiled in 29ms"}
+{"timestamp":"01:08:48.403","source":"Server","level":"LOG","message":"✓ Compiled in 16ms"}
+{"timestamp":"01:09:01.307","source":"Server","level":"LOG","message":"✓ Compiled in 13ms"}
