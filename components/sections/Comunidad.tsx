@@ -82,12 +82,12 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
   }, []);
 
   /* ─── Build a query with the current filters ─── */
-  const buildQuery = useCallback(() => {
+  const buildQuery = useCallback((currentPage: number) => {
     let q = supabase
       .from("posts")
       .select(POST_SELECT)
       .order("created_at", { ascending: false })
-      .range(page * pageSize, (page + 1) * pageSize - 1)
+      .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1)
       .limit(2, { referencedTable: "comments" });
 
     if (activeTab === "oratorio") {
@@ -109,44 +109,49 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
     if (!silent && !isLoadMore) setLoading(true);
     if (isLoadMore) setLoadingMore(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // getUser y posts query en paralelo — ahorra 300-500ms
+      const [userResult, postsResult] = await Promise.all([
+        supabase.auth.getUser(),
+        buildQuery(page),
+      ]);
+
+      const user = userResult.data?.user;
       if (user) setUserId(user.id);
 
-      const { data, error } = await buildQuery();
+      const { data, error } = postsResult;
 
       if (error) {
         console.warn("Query error, trying fallback:", error.message);
-        // ... fallback ...
       } else {
         const postsData = (data as unknown as Post[]) ?? [];
-        
-        if (postsData.length < pageSize) {
-          setHasMore(false);
-        }
 
-        // Fetch counts for all posts to show "View all X comments"
-        const postIds = postsData.map(p => p.id);
-        if (postIds.length > 0) {
-          const { data: countsData } = await supabase
-            .from("comments")
-            .select("post_id")
-            .in("post_id", postIds);
-          
-          if (countsData) {
-            const counts: Record<string, number> = {};
-            countsData.forEach(c => {
-              counts[c.post_id] = (counts[c.post_id] || 0) + 1;
-            });
-            postsData.forEach(p => {
-              p.total_comments = counts[p.id] || 0;
-            });
-          }
-        }
-        
+        if (postsData.length < pageSize) setHasMore(false);
+
+        // Mostrar posts INMEDIATAMENTE — sin esperar el conteo de comentarios
         if (page === 0) {
           setPosts(postsData);
         } else {
           setPosts(prev => [...prev, ...postsData]);
+        }
+
+        // Conteo de comentarios en background — no bloquea el render
+        const postIds = postsData.map(p => p.id);
+        if (postIds.length > 0) {
+          supabase
+            .from("comments")
+            .select("post_id")
+            .in("post_id", postIds)
+            .then(({ data: countsData }) => {
+              if (!countsData) return;
+              const counts: Record<string, number> = {};
+              countsData.forEach(c => {
+                counts[c.post_id] = (counts[c.post_id] || 0) + 1;
+              });
+              setPosts(prev => prev.map(p => ({
+                ...p,
+                total_comments: counts[p.id] ?? p.total_comments ?? 0,
+              })));
+            });
         }
       }
     } catch (err) {

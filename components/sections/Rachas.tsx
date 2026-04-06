@@ -39,22 +39,29 @@ export default function Rachas({ communityId }: { communityId?: string }) {
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) setUserId(user.id);
 
-    let query = supabase
+    let streaksQuery = supabase
       .from("streaks")
       .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name)")
       .order("streak_days", { ascending: false })
-      .limit(15); // Extra to filter "Agente Base" and still have 10
-      
+      .limit(15);
+
     if (communityId) {
-      query = query.eq('community_id', communityId);
+      streaksQuery = streaksQuery.eq('community_id', communityId);
     } else {
-      query = query.is('community_id', null);
+      streaksQuery = streaksQuery.is('community_id', null);
     }
 
-    const { data, error } = await query;
+    // getUser y streaks en paralelo — ahorra 300-500ms
+    const [userResult, streaksResult] = await Promise.all([
+      supabase.auth.getUser(),
+      streaksQuery,
+    ]);
+
+    const user = userResult.data?.user;
+    if (user) setUserId(user.id);
+
+    const { data, error } = streaksResult;
     let streakData = data ? (data as any).filter((s: any) => 
       s.profiles?.full_name?.toLowerCase() !== "agente base" && 
       s.profiles?.username?.toLowerCase() !== "agente base"
@@ -80,34 +87,45 @@ export default function Rachas({ communityId }: { communityId?: string }) {
 
     if (streakData) {
       setTopStreaks((streakData as unknown as Streak[]) ?? []);
-      
+
       if (user) {
         const mine = (streakData as any[]).find(s => s.user_id === user.id);
         if (mine) {
           setMyStreak(mine);
+          setLoading(false); // mostrar inmediatamente si ya está en el top
         } else {
-          // Intentamos full y luego fallback para el usuario singular
-          let myQuery = supabase.from("streaks").select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name)").eq("user_id", user.id);
+          // Mostrar el ranking ya, buscar la racha propia en background
+          setLoading(false);
+          let myQuery = supabase
+            .from("streaks")
+            .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name)")
+            .eq("user_id", user.id);
           if (communityId) myQuery = myQuery.eq('community_id', communityId);
           else myQuery = myQuery.is('community_id', null);
-          
-          const { data: myData, error: myError } = await myQuery.maybeSingle();
-          
-          if (myData) {
-             setMyStreak(myData as unknown as Streak);
-          } else {
-             // Fallback just in case
-             let fallbackMineQuery = supabase.from("streaks").select("streak_days, last_checkin, user_id, profiles(username, full_name)").eq("user_id", user.id);
-             if (communityId) fallbackMineQuery = fallbackMineQuery.eq("community_id", communityId);
-             else fallbackMineQuery = fallbackMineQuery.is("community_id", null);
-             
-             const { data: fallbackMine } = await fallbackMineQuery.maybeSingle();
-             if (fallbackMine) setMyStreak(fallbackMine as unknown as Streak);
-          }
+
+          myQuery.maybeSingle().then(({ data: myData }) => {
+            if (myData) {
+              setMyStreak(myData as unknown as Streak);
+            } else {
+              // Fallback sin columnas de misión
+              let fallbackQ = supabase
+                .from("streaks")
+                .select("streak_days, last_checkin, user_id, profiles(username, full_name)")
+                .eq("user_id", user.id);
+              if (communityId) fallbackQ = fallbackQ.eq("community_id", communityId);
+              else fallbackQ = fallbackQ.is("community_id", null);
+              fallbackQ.maybeSingle().then(({ data: fb }) => {
+                if (fb) setMyStreak(fb as unknown as Streak);
+              });
+            }
+          });
         }
+      } else {
+        setLoading(false);
       }
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCheckIn = async (e: React.FormEvent) => {
