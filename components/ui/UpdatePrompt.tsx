@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, X, Download, Share } from "lucide-react";
+import { RefreshCw, X, Download, Share, Zap } from "lucide-react";
 
-const APP_VERSION = "2.3.0"; // Local version after update
+// ESTA VERSIÓN DEBE COINCIDIR CON /public/version.json PARA QUE NO SALTE EL AVISO
+const APP_VERSION = "2.5.0"; 
 
 export default function UpdatePrompt() {
   const [show, setShow] = useState(false);
@@ -15,14 +16,14 @@ export default function UpdatePrompt() {
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
     const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
-    
     setIsIOS(isIOSDevice && !isStandalone);
 
-    // 2. Check version
+    // 2. Check version against server
     const checkVersion = async () => {
       try {
-        const res = await fetch(`/version.json?t=${Date.now()}`);
+        const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
         const data = await res.json();
+        // Si la versión del servidor es superior a la local, mostramos el aviso
         if (data.version && data.version !== APP_VERSION) {
           setShow(true);
         }
@@ -31,13 +32,9 @@ export default function UpdatePrompt() {
       }
     };
 
-    // Check after 5s initial delay to prioritize main content loading
-    const initialDelay = setTimeout(() => {
-      checkVersion();
-    }, 5000);
-    
-    // Check every 30 minutes
-    const interval = setInterval(checkVersion, 30 * 60 * 1000);
+    // Check after 3s
+    const initialDelay = setTimeout(checkVersion, 3000);
+    const interval = setInterval(checkVersion, 10 * 60 * 1000); // 10 min
     
     return () => {
       clearTimeout(initialDelay);
@@ -47,23 +44,23 @@ export default function UpdatePrompt() {
 
   const handleUpdate = () => {
     if (typeof window !== "undefined") {
-      // Intenta forzar la actualización del service worker si existe
+      // Limpiar cachés de Service Worker si existen
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(registrations => {
-          for (let registration of registrations) {
-            registration.update();
-          }
+          for (let registration of registrations) registration.unregister();
         });
       }
-      window.location.reload();
+      // Hard reload con cache busting
+      window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now() + window.location.hash;
     }
   };
 
-  if (!show && !showIOSHint) return null;
+  if (!show && !showIOSHint) {
+    return null;
+  }
 
   return (
     <>
-      {/* Update Notification */}
       {show && (
         <div className="fixed bottom-24 inset-x-0 z-[200] px-4 animate-fade-in-up">
           <div className="bg-navy-dark text-white p-4 rounded-2xl shadow-2xl border border-gold/30 flex items-center gap-3 max-w-sm mx-auto">
@@ -71,8 +68,8 @@ export default function UpdatePrompt() {
                 <RefreshCw className="text-gold animate-spin-slow" size={20} />
             </div>
             <div className="flex-1 min-w-0">
-                <p className="font-serif font-bold text-xs leading-tight">Nueva versión disponible</p>
-                <p className="font-sans text-[10px] text-white/70 truncate tracking-tight">Pulsa para instalar mejoras.</p>
+                <p className="font-serif font-bold text-xs leading-tight">Actualización Disponible</p>
+                <p className="font-sans text-[10px] text-white/70 truncate tracking-tight">Version {APP_VERSION}+ detectada. Pulsa para aplicar.</p>
             </div>
             <button 
                 onClick={handleUpdate}
@@ -87,10 +84,9 @@ export default function UpdatePrompt() {
         </div>
       )}
 
-      {/* iOS Install Hint Modal (if needed) */}
       {showIOSHint && (
           <div className="fixed inset-0 bg-navy-dark/60 backdrop-blur-sm z-[300] flex items-end p-4">
-              <div className="bg-white w-full rounded-3xl p-6 shadow-2xl animate-slide-up">
+              <div className="bg-white w-full rounded-3xl p-6 shadow-2xl animate-fade-in-up">
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="font-serif text-xl font-bold text-navy-dark">Instalar en iPhone</h3>
                       <button onClick={() => setShowIOSHint(false)}><X size={24} className="text-navy-dark/40" /></button>
@@ -98,49 +94,21 @@ export default function UpdatePrompt() {
                   <div className="space-y-6">
                       <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-cream flex items-center justify-center font-bold text-gold border border-gold/20">1</div>
-                          <p className="font-sans text-sm text-navy-dark">Toca el botón <strong>Compartir</strong> en la barra inferior de Safari.</p>
+                          <p className="font-sans text-sm text-navy-dark">Toca el botón <strong>Compartir</strong> en Safari.</p>
                           <Share size={20} className="text-gold ml-auto" />
                       </div>
-                      <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-cream flex items-center justify-center font-bold text-gold border border-gold/20">2</div>
-                          <p className="font-sans text-sm text-navy-dark">Baja y selecciona <strong>Añadir a pantalla de inicio</strong>.</p>
-                          <PlusSquareIcon />
-                      </div>
                   </div>
-                  <button 
-                    onClick={() => setShowIOSHint(false)}
-                    className="w-full mt-8 bg-navy-dark text-white font-sans font-bold py-4 rounded-2xl shadow-lg"
-                  >
-                    Entendido
-                  </button>
+                  <button onClick={() => setShowIOSHint(false)} className="w-full mt-8 bg-navy-dark text-white font-sans font-bold py-4 rounded-2xl">Entendido</button>
               </div>
           </div>
       )}
       
       <style jsx>{`
-        .animate-fade-in-up { 
-          animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
-        }
-        @keyframes fade-in-up { 
-          from { transform: translateY(20px); opacity: 0; } 
-          to { transform: translateY(0); opacity: 1; } 
-        }
+        .animate-fade-in-up { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fade-in-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-spin-slow { animation: spin 4s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
       `}</style>
     </>
   );
-}
-
-function PlusSquareIcon() {
-    return (
-        <div className="w-8 h-8 rounded-lg bg-cream border border-gold/20 flex items-center justify-center ml-auto">
-            <div className="relative w-4 h-4 border-2 border-gold rounded-sm flex items-center justify-center">
-                <div className="absolute w-2.5 h-0.5 bg-gold" />
-                <div className="absolute w-0.5 h-2.5 bg-gold" />
-            </div>
-        </div>
-    )
 }

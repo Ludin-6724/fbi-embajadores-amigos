@@ -26,6 +26,8 @@ type MembershipEntry = {
 
 type PendingRequest = { community_id: string };
 
+const supabase = createClient();
+
 export default function SubCommunities() {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,8 +38,6 @@ export default function SubCommunities() {
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-
-  const supabase = createClient();
 
   const showToast = (msg: string) => {
     setToast(msg);

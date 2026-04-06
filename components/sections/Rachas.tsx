@@ -56,68 +56,43 @@ export default function Rachas({
   }, [statusMsg]);
 
   const fetchData = async () => {
-    const isInitialLoad = topStreaks.length === 0;
-    if (isInitialLoad) setLoading(true);
+    if (topStreaks.length === 0) setLoading(true);
     setError(null);
 
-    let streaksQuery = supabase
-      .from("streaks")
-      .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
-      .order("streak_days", { ascending: false })
-      .limit(15);
-
-    if (communityId) {
-      streaksQuery = streaksQuery.eq('community_id', communityId);
-    } else {
-      streaksQuery = streaksQuery.is('community_id', null);
-    }
-
     try {
-      // If we already have a user ID, we can skip one parallel call
-      const promises: [Promise<any>, Promise<any>] = [
-        userId ? Promise.resolve({ data: { user: { id: userId } } }) : supabase.auth.getUser(),
-        Promise.resolve(streaksQuery),
-      ];
+      let streaksQuery = supabase
+        .from("streaks")
+        .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
+        .order("streak_days", { ascending: false })
+        .limit(10);
 
-      const [userResult, streaksResult] = await Promise.all(promises);
+      if (communityId) streaksQuery = streaksQuery.eq('community_id', communityId);
+      else streaksQuery = streaksQuery.is('community_id', null);
 
-      const user = userResult.data?.user;
-      if (user && !userId) setUserId(user.id);
-
-      const { data, error: streaksError } = streaksResult;
+      const { data, error: streaksError } = await streaksQuery;
       
       if (streaksError) {
-        console.warn("Nuevas columnas de misiones no detectadas, usando fallback:", streaksError.message);
-        let fallbackDataQuery = supabase
-           .from("streaks")
-           .select("streak_days, last_checkin, user_id, profiles(username, full_name, avatar_url)")
-           .order("streak_days", { ascending: false })
-           .limit(5);
-        
-        if (communityId) {
-          fallbackDataQuery = fallbackDataQuery.eq('community_id', communityId);
-        } else {
-          fallbackDataQuery = fallbackDataQuery.is('community_id', null);
-        }
-        
-        const { data: fallbackData, error: fbError } = await fallbackDataQuery;
-        if (fbError) throw fbError;
-        
-        const streakData = (fallbackData as unknown as Streak[]) ?? [];
-        setTopStreaks(streakData);
-        if (user) fetchMyStreak(user.id, streakData);
+        console.warn("Retrying streak fetch:", streaksError.message);
+        const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, user_id, profiles(username)").limit(5);
+        if (fbErr) throw fbErr;
+        setTopStreaks(fallback as any);
       } else {
-        const streakData = (data as any).filter((s: any) => 
-          s.profiles?.full_name?.toLowerCase() !== "agente base" && 
-          s.profiles?.username?.toLowerCase() !== "agente base"
-        ).slice(0, 10);
-        
-        setTopStreaks(streakData);
-        if (user) fetchMyStreak(user.id, streakData);
+        setTopStreaks((data as any) || []);
+      }
+
+      // Check self streak using existing userId
+      if (userId) {
+        const mine = (data as any)?.find((s: any) => s.user_id === userId);
+        if (mine) setMyStreak(mine);
+        else {
+          supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle().then(({ data: myD }) => {
+            if (myD) setMyStreak(myD as any);
+          });
+        }
       }
     } catch (err: any) {
       console.error("fetchData error:", err);
-      setError("No se pudieron cargar las rachas. Verifica tu conexión.");
+      setError("Sede Offline: Error de conexión.");
     } finally {
       setLoading(false);
     }

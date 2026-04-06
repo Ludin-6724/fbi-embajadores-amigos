@@ -51,7 +51,7 @@ export default function Navbar({
     checkUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (_event: any, session: any) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
@@ -224,17 +224,9 @@ export default function Navbar({
             />
           </Link>
 
-          {/* ── Desktop Nav ── */}
-          <div className="hidden md:flex items-center space-x-8">
-            {user && navLinks.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                className="text-sm font-medium text-navy-dark/80 hover:text-gold transition-colors"
-              >
-                {link.name}
-              </Link>
-            ))}
+          {/* ── Desktop Nav (Simplified for Unified Navigation) ── */}
+          <div className="hidden md:flex items-center space-x-12">
+            {/* The primary navigation is now handled by the BottomNavbar on all devices for parity */}
 
             {user ? (
               <div className="flex items-center gap-2">
