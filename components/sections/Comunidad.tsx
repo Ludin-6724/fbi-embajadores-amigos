@@ -45,6 +45,8 @@ export default function Comunidad({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [inlinePostContent, setInlinePostContent] = useState("");
+  const [isSubmittingInline, setIsSubmittingInline] = useState(false);
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -235,6 +237,32 @@ export default function Comunidad({
     }
   };
 
+  const handleInlinePost = async () => {
+    if (!userId) { showToast("Debes iniciar sesión para publicar.", false); return; }
+    if (!inlinePostContent.trim() || isSubmittingInline) return;
+
+    setIsSubmittingInline(true);
+    try {
+      const { error } = await sbRef.current.from("posts").insert({
+        author_id: userId,
+        content: inlinePostContent.trim(),
+        is_anonymous: activeTab === "oratorio",
+        community_id: communityId || null
+      });
+
+      if (error) throw error;
+      
+      setInlinePostContent("");
+      showToast("¡Publicado correctamente!");
+      fetchPosts(0, false);
+      window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
+    } catch (err: any) {
+      showToast(`Error al publicar: ${err.message}`, false);
+    } finally {
+      setIsSubmittingInline(false);
+    }
+  };
+
   const handleEditComment = async (cId: string, pId: string) => {
     if (!editContent.trim()) return;
     try {
@@ -342,6 +370,38 @@ export default function Comunidad({
                   "Y todo lo que pidiereis en oración, creyendo, lo recibiréis."
                 </p>
                 <p className="text-[10px] font-bold text-gold uppercase tracking-widest mt-3">Mateo 21:22 (RVR1960)</p>
+              </div>
+            )}
+
+            {/* Inline Post Creation (Only IF NOT looking at a single post view) */}
+            {!postId && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-3 items-start">
+                <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {initialProfile?.avatar_url && activeTab !== "oratorio"
+                    ? <img src={initialProfile.avatar_url} className="w-full h-full object-cover" alt="" />
+                    : <span className="font-bold text-gold text-sm">{activeTab === "oratorio" ? <Fingerprint size={18} /> : (initialProfile?.full_name?.[0] || "A")}</span>
+                  }
+                </div>
+                <div className="flex-1 flex flex-col gap-2">
+                  <textarea
+                    value={inlinePostContent}
+                    onChange={e => setInlinePostContent(e.target.value)}
+                    placeholder={activeTab === "muro" ? "¿Qué luz vas a compartir hoy con la comunidad?" : "Escribe tu petición o testimonio de forma anónima..."}
+                    className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none transition-all"
+                    rows={inlinePostContent.includes('\n') ? 3 : 1}
+                  />
+                  {inlinePostContent.trim() && (
+                    <div className="flex justify-end animate-in fade-in pt-1">
+                      <button 
+                        onClick={handleInlinePost}
+                        disabled={isSubmittingInline}
+                        className="px-5 py-2 bg-navy-dark text-white rounded-full text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 active:scale-95 transition-all shadow-md hover:bg-gold hover:text-navy-dark"
+                      >
+                        {isSubmittingInline ? "Publicando..." : "Publicar"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

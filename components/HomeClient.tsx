@@ -106,7 +106,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
     <>
       <Navbar initialUser={initialUser} initialProfile={initialProfile} />
       <main className="flex-1 flex flex-col bg-white pb-24">
-        {initialProfile && <DashboardActions profile={initialProfile} hideVisuals={false} />}
+        {initialProfile && <DashboardActions profile={initialProfile} hideVisuals={true} />}
         {renderContent()}
       </main>
       <Footer />
