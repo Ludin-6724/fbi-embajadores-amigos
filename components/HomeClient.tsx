@@ -18,7 +18,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
   // Sync tab with URL hash on mount and on changes
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as TabType;
-    const validTabs: TabType[] = ["feed", "prayers", "streaks", "profile"];
+    const validTabs: TabType[] = ["feed", "prayers", "streaks", "groups", "profile"];
     if (hash && validTabs.includes(hash)) {
       setActiveTab(hash);
     }
@@ -67,6 +67,13 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
           <>
              <div className="pt-20 bg-cream"></div>
              <Rachas />
+          </>
+        );
+      case "groups":
+        return (
+          <>
+            <div className="pt-20 bg-white"></div>
+            <SubCommunities />
           </>
         );
       case "profile":
