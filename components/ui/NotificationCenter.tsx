@@ -53,18 +53,42 @@ export default function NotificationCenter() {
       // Subscribe to real-time notifications
       if (mounted) {
         channel = supabase
-          .channel(`notifs_${user.id.substring(0, 8)}_${Math.random().toString(36).substring(7)}`) // Very unique
+          .channel(`notifs_${user.id.substring(0, 8)}_${Math.random().toString(36).substring(7)}`)
           .on(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
             (payload) => {
-              if (mounted) {
-                setNotifications(prev => [payload.new as Notification, ...prev]);
-                setUnreadCount(prev => prev + 1);
+              if (!mounted) return;
+              const newNotif = payload.new as Notification;
+              setNotifications(prev => [newNotif, ...prev]);
+              setUnreadCount(prev => prev + 1);
+
+              // Notificación del sistema (sonido + banner del OS)
+              if (typeof window !== 'undefined' && window.Notification?.permission === 'granted') {
+                const sysNotif = new window.Notification('FBI Amigos', {
+                  body: newNotif.message,
+                  icon: '/logo-fbi.jpg',
+                  badge: '/logo-fbi.jpg',
+                  tag: newNotif.id,
+                });
+                sysNotif.onclick = () => {
+                  window.focus();
+                  sysNotif.close();
+                  navigateToLink(newNotif.link);
+                };
               }
             }
           )
           .subscribe();
+
+        // Escuchar mensajes del Service Worker (click en notif con app en background)
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data?.type === 'NAVIGATE_TO' && mounted) {
+              navigateToLink(event.data.link);
+            }
+          });
+        }
       }
     };
 
@@ -134,6 +158,23 @@ export default function NotificationCenter() {
     }
   };
 
+  const navigateToLink = (link: string | null) => {
+    if (!link) return;
+    if (link.startsWith('#')) {
+      const id = link.substring(1);
+      // Si el elemento ya está en el DOM, hacer scroll directo
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        // Navegar a la home con el hash para que cargue el post
+        window.location.href = '/' + link;
+      }
+    } else {
+      window.location.href = link;
+    }
+  };
+
   const getIcon = (type: Notification['type']) => {
     switch (type) {
       case 'reaction': return <Heart size={14} className="text-pink-500" />;
@@ -158,8 +199,8 @@ export default function NotificationCenter() {
       </button>
 
       {isOpen && (
-        <div 
-          className="absolute right-0 mt-3 w-[calc(100vw-2rem)] md:w-80 bg-white border border-light-gray rounded-2xl shadow-2xl overflow-hidden z-[100]"
+        <div
+          className="fixed inset-x-3 top-20 md:absolute md:inset-x-auto md:top-auto md:right-0 md:mt-3 md:w-80 bg-white border border-light-gray rounded-2xl shadow-2xl overflow-hidden z-[200]"
           style={{ animation: 'dropdownIn 0.2s cubic-bezier(0.16,1,0.3,1) forwards' }}
         >
           <div className="px-5 py-4 border-b border-light-gray flex items-center justify-between bg-cream/30">
@@ -192,17 +233,9 @@ export default function NotificationCenter() {
                   <div 
                     key={n.id}
                     onClick={() => {
-                        if (!n.is_read) markAsRead(n.id);
-                        if (n.link) {
-                            setIsOpen(false);
-                            // handle navigation
-                            if (n.link.startsWith('#')) {
-                                const el = document.getElementById(n.link.substring(1));
-                                el?.scrollIntoView({ behavior: 'smooth' });
-                            } else {
-                                window.location.href = n.link;
-                            }
-                        }
+                      if (!n.is_read) markAsRead(n.id);
+                      setIsOpen(false);
+                      navigateToLink(n.link);
                     }}
                     className={cn(
                       "px-5 py-4 cursor-pointer hover:bg-cream/40 transition-colors relative flex gap-3",

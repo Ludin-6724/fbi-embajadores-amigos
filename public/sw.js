@@ -82,13 +82,14 @@ self.addEventListener('fetch', (event) => {
 // Manejar notificaciones Push
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : { title: 'FBI Amigos', body: 'Nueva notificación' };
-  
+
   const options = {
     body: data.body,
     icon: '/logo-fbi.jpg',
     badge: '/logo-fbi.jpg',
-    data: data.url || '/',
-    vibrate: [100, 50, 100],
+    data: { link: data.link || data.url || '/' },
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
   };
 
   event.waitUntil(
@@ -96,20 +97,23 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Al hacer clic en la notificación
+// Al hacer clic en la notificación del sistema
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const link = event.notification.data?.link || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url === '/' && 'focus' in client) {
-          return client.focus();
-        }
+      // Si hay una ventana abierta, enfocarla y mandar mensaje para navegar
+      if (clientList.length > 0) {
+        const client = clientList[0];
+        return client.focus().then(() => {
+          client.postMessage({ type: 'NAVIGATE_TO', link });
+        });
       }
-      if (clients.openWindow) {
-        return clients.openWindow(event.notification.data || '/');
-      }
+      // Si no hay ventana, abrir una nueva con el destino correcto
+      const targetUrl = link.startsWith('#') ? '/' + link : link;
+      return clients.openWindow(targetUrl);
     })
   );
 });
