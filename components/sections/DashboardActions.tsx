@@ -42,16 +42,18 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     window.addEventListener("fbi:open-prayer-modal", handleOpenPrayer);
     window.addEventListener("fbi:open-publish-selector", handleOpenSelector);
 
-    if (activeModal === "streak") {
-        fetchMyStreak();
-    }
-
     return () => {
       window.removeEventListener("fbi:open-community-modal", handleOpenCommunity);
       window.removeEventListener("fbi:open-post-modal", handleOpenPost);
       window.removeEventListener("fbi:open-prayer-modal", handleOpenPrayer);
       window.removeEventListener("fbi:open-publish-selector", handleOpenSelector);
     };
+  }, []);
+
+  useEffect(() => {
+    if (activeModal === "streak") {
+        fetchMyStreak();
+    }
   }, [activeModal]);
 
   const fetchMyStreak = async () => {
@@ -202,6 +204,9 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
           </div>
         </div>
       </div>
+
+        </section>
+      )}
 
       {/* Modals — Full screen on mobile, centered card on desktop */}
       {activeModal && (
@@ -436,8 +441,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
             </div>
           </div>
         </div>
-      )}
-        </section>
       )}
     </>
   );
