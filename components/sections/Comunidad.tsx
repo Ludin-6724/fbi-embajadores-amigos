@@ -437,7 +437,7 @@ export default function Comunidad({
                     onChange={e => setInlinePostContent(e.target.value)}
                     placeholder={activeTab === "muro" ? "¿Qué tienes para compartir hoy agente?" : "Escribe tu petición o testimonio de forma anónima..."}
                     className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none transition-all"
-                    rows={inlinePostContent.includes('\n') ? 3 : 1}
+                    rows={inlinePostContent.includes('\n') ? 4 : 2}
                   />
                   {inlinePostContent.trim() && (
                     <div className="flex justify-end animate-in fade-in pt-1">

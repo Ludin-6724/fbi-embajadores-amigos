@@ -197,6 +197,18 @@ export default function Rachas({
       }
 
       if (!reqError) {
+        // Also automatically share this milestone to the community wall
+        try {
+          await supabase.from("posts").insert({
+            author_id: userId,
+            content: `🎯 ¡Acabo de registrar mi misión del día y logré una racha de ${newDays} días!\n\n"${missionNote.trim()}"`,
+            is_anonymous: false,
+            community_id: communityId || null
+          });
+        } catch (e) {
+          console.warn("Failed to auto-post mission milestone to wall", e);
+        }
+
         setStatusMsg({ message: "¡Misión registrada con éxito! Tu racha ha subido.", type: 'success' });
         await fetchData();
         setMissionNote("");
