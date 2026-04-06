@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Points, PointMaterial, Center } from "@react-three/drei";
 import * as random from "maath/random/dist/maath-random.esm";
@@ -8,9 +8,18 @@ import * as THREE from "three";
 
 function CelestialParticles() {
   const ref = useRef<THREE.Points>(null);
+  const [particleCount, setParticleCount] = useState(800);
+
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setParticleCount(200);
+    }
+  }, []);
   
-  // Create 800 particles within a sphere
-  const sphere = random.inSphere(new Float32Array(800 * 3), { radius: 3 }) as Float32Array;
+  // Create particles within a sphere
+  const sphere = useMemo(() => 
+    random.inSphere(new Float32Array(particleCount * 3), { radius: 3 }) as Float32Array
+  , [particleCount]);
 
   useFrame((state, delta) => {
     if (ref.current) {

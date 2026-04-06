@@ -56,10 +56,19 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editPostText, setEditPostText] = useState("");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const pageSize = 20;
+
+  const [fullComments, setFullComments] = useState<Record<string, CommentRow[]>>({});
+  const [fetchingFull, setFetchingFull] = useState<Record<string, boolean>>({});
 
   // Sync activeTab with initialTab when it changes from outside
   useEffect(() => {
     setActiveTab(initialTab);
+    setPage(0);
+    setHasMore(true);
   }, [initialTab]);
 
   const supabase = createClient();
@@ -78,7 +87,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
       .from("posts")
       .select(POST_SELECT)
       .order("created_at", { ascending: false })
-      .limit(100)
+      .range(page * pageSize, (page + 1) * pageSize - 1)
       .limit(2, { referencedTable: "comments" });
 
     if (activeTab === "oratorio") {
@@ -96,8 +105,9 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
   }, [activeTab, communityId]);
 
   /* ─── Fetch posts from DB ─── */
-  const fetchPosts = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+  const fetchPosts = useCallback(async (silent = false, isLoadMore = false) => {
+    if (!silent && !isLoadMore) setLoading(true);
+    if (isLoadMore) setLoadingMore(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserId(user.id);
@@ -110,6 +120,10 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
       } else {
         const postsData = (data as unknown as Post[]) ?? [];
         
+        if (postsData.length < pageSize) {
+          setHasMore(false);
+        }
+
         // Fetch counts for all posts to show "View all X comments"
         const postIds = postsData.map(p => p.id);
         if (postIds.length > 0) {
@@ -128,19 +142,30 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
             });
           }
         }
-        setPosts(postsData);
+        
+        if (page === 0) {
+          setPosts(postsData);
+        } else {
+          setPosts(prev => [...prev, ...postsData]);
+        }
       }
     } catch (err) {
       console.error("fetchPosts error:", err);
     } finally {
       if (!silent) setLoading(false);
+      setLoadingMore(false);
     }
-  }, [buildQuery]);
+  }, [buildQuery, page]);
 
-  const [fullComments, setFullComments] = useState<Record<string, CommentRow[]>>({});
-  const [fetchingFull, setFetchingFull] = useState<Record<string, boolean>>({});
+  const handleLoadMore = () => {
+    if (hasMore && !loadingMore) {
+      setPage(prev => prev + 1);
+    }
+  };
 
-  useEffect(() => { fetchPosts(); }, [activeTab, communityId]);
+  useEffect(() => {
+    fetchPosts(false, page > 0);
+  }, [page, activeTab, communityId]);
 
   const fetchFullComments = useCallback(async (postId: string) => {
     setFetchingFull(prev => ({ ...prev, [postId]: true }));
@@ -520,7 +545,8 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <>
+              <div className="space-y-6 max-w-2xl mx-auto">
               {posts.map(post => {
                 const postDate = new Date(post.created_at).toLocaleDateString("es-ES", {
                   month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
@@ -801,7 +827,33 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                 );
               })}
             </div>
-          )}
+
+            {hasMore && (
+              <div className="flex justify-center mt-12 pb-20">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="flex items-center gap-2 px-8 py-3 bg-white border border-light-gray text-navy-dark font-sans font-bold rounded-full hover:bg-cream transition-all shadow-sm disabled:opacity-50"
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin text-gold" />
+                      Cargando más...
+                    </>
+                  ) : (
+                    "Cargar más publicaciones"
+                  )}
+                </button>
+              </div>
+            )}
+            
+            {!hasMore && posts.length > 0 && (
+              <p className="text-center text-navy-dark/40 font-sans text-sm mt-12 pb-20 italic">
+                Has llegado al final del muro
+              </p>
+            )}
+          </>
+        )}
         </div>
       </div>
     </section>

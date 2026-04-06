@@ -21,38 +21,25 @@ export default async function CommunityPage({ params }: { params: Promise<{ id: 
     redirect("/");
   }
 
-  let profile = null;
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-  profile = profileData;
+  // Parallelize all initial data fetching
+  const [profileResult, communityResult, membershipResult] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
+    supabase.from('communities').select('*').eq('id', id).single(),
+    supabase.from('community_members').select('role').eq('community_id', id).eq('user_id', user.id).maybeSingle()
+  ]);
 
-  // Fetch Community
-  const { data: community } = await supabase
-    .from('communities')
-    .select('*')
-    .eq('id', id)
-    .single();
+  const profile = profileResult.data;
+  const community = communityResult.data;
+  const memberData = membershipResult.data;
 
   if (!community) {
     notFound();
   }
 
   const isOwner = community.owner_id === user.id;
-
-  // Check if user is admin/founder member
-  const { data: memberData } = await supabase
-    .from('community_members')
-    .select('role')
-    .eq('community_id', id)
-    .eq('user_id', user.id)
-    .single();
-
   const isAdmin = isOwner || ['admin', 'founder'].includes(memberData?.role ?? '');
 
-  // Count pending requests for private communities (admin only)
+  // Fetch pending requests in parallel if admin
   let pendingCount = 0;
   if (isAdmin && community.is_private) {
     const { count } = await supabase

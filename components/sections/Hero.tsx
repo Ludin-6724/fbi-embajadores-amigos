@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { MoveRight, ChevronDown } from "lucide-react";
-import HeroCanvas from "@/components/three/HeroCanvas";
+import dynamic from "next/dynamic";
+const HeroCanvas = dynamic(() => import("@/components/three/HeroCanvas"), { ssr: false });
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { createClient } from "@/lib/supabase/client";
