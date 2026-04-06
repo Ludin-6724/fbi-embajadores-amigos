@@ -10,7 +10,11 @@ type Streak = {
   last_mission_title?: string | null;
   last_mission_note?: string | null;
   user_id: string;
-  profiles: { username: string | null; full_name: string | null } | null;
+  profiles: { 
+    username: string | null; 
+    full_name: string | null;
+    avatar_url: string | null;
+  } | null;
 };
 
 export default function Rachas({ communityId }: { communityId?: string }) {
@@ -21,6 +25,8 @@ export default function Rachas({ communityId }: { communityId?: string }) {
   const [checkingIn, setCheckingIn] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cheeringId, setCheeringId] = useState<string | null>(null);
+  const [cheeredIds, setCheeredIds] = useState<Set<string>>(new Set());
 
   // Form state
   const [missionNote, setMissionNote] = useState("");
@@ -45,7 +51,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
 
     let streaksQuery = supabase
       .from("streaks")
-      .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name)")
+      .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
       .order("streak_days", { ascending: false })
       .limit(15);
 
@@ -71,7 +77,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
         console.warn("Nuevas columnas de misiones no detectadas, usando fallback:", streaksError.message);
         let fallbackDataQuery = supabase
            .from("streaks")
-           .select("streak_days, last_checkin, user_id, profiles(username, full_name)")
+           .select("streak_days, last_checkin, user_id, profiles(username, full_name, avatar_url)")
            .order("streak_days", { ascending: false })
            .limit(5);
         
@@ -113,7 +119,7 @@ export default function Rachas({ communityId }: { communityId?: string }) {
 
     let myQuery = supabase
       .from("streaks")
-      .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name)")
+      .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
       .eq("user_id", uId);
     if (communityId) myQuery = myQuery.eq('community_id', communityId);
     else myQuery = myQuery.is('community_id', null);
@@ -229,6 +235,69 @@ export default function Rachas({ communityId }: { communityId?: string }) {
     return last.getDate() === today.getDate() && 
            last.getMonth() === today.getMonth() && 
            last.getFullYear() === today.getFullYear();
+  };
+
+  const handleCheer = async (target: Streak) => {
+    if (!userId || cheeringId || cheeredIds.has(target.user_id) || target.user_id === userId) return;
+
+    setCheeringId(target.user_id);
+    
+    const myName = myStreak?.profiles?.full_name || myStreak?.profiles?.username || "Un Agente";
+    const message = `¡${myName} te animó a seguir con tu racha de ${target.streak_days} días! 🔥`;
+
+    try {
+      const { error } = await supabase.from("notifications").insert({
+        user_id: target.user_id,
+        actor_id: userId,
+        type: "cheer",
+        message,
+        link: "#rachas"
+      });
+
+      if (!error) {
+        setCheeredIds(prev => new Set(prev).add(target.user_id));
+        setStatusMsg({ message: `¡Ánimo enviado a ${target.profiles?.full_name || 'Agente'}!`, type: 'success' });
+      } else {
+        throw error;
+      }
+    } catch (err) {
+      console.error("Error sending cheer:", err);
+    } finally {
+      setCheeringId(null);
+    }
+  };
+
+  const getRankStyle = (idx: number) => {
+    switch(idx) {
+      case 0: return {
+        border: "border-gold",
+        bg: "bg-gold/10",
+        text: "text-gold",
+        shadow: "shadow-[0_0_15px_rgba(212,175,55,0.3)]",
+        label: "Oro"
+      };
+      case 1: return {
+        border: "border-slate-400",
+        bg: "bg-slate-400/10",
+        text: "text-slate-500",
+        shadow: "shadow-sm",
+        label: "Plata"
+      };
+      case 2: return {
+        border: "border-amber-700",
+        bg: "bg-amber-700/10",
+        text: "text-amber-800",
+        shadow: "shadow-sm",
+        label: "Bronce"
+      };
+      default: return {
+        border: "border-gold/20",
+        bg: "bg-white",
+        text: "text-navy-dark",
+        shadow: "shadow-inner",
+        label: ""
+      };
+    }
   };
 
   return (
@@ -357,27 +426,79 @@ export default function Rachas({ communityId }: { communityId?: string }) {
             <div className="space-y-4">
               {topStreaks.map((streak, idx) => {
                 const name = streak.profiles?.full_name || streak.profiles?.username || "Agente";
+                const rStyle = getRankStyle(idx);
+                const isMe = streak.user_id === userId;
+                const hasCheered = cheeredIds.has(streak.user_id);
+
                 return (
                   <div
                     key={idx}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl bg-cream/30 shadow-sm border border-light-gray hover:border-gold/30 transition-all group gap-4"
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl transition-all group gap-4 border ${
+                      isMe ? "bg-gold/5 border-gold shadow-md" : `bg-cream/30 ${rStyle.border} ${idx < 3 ? 'shadow-md' : 'shadow-sm'}`
+                    } hover:scale-[1.01] duration-300`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-white border border-gold/20 flex flex-shrink-0 items-center justify-center font-serif font-bold text-navy-dark text-lg shadow-inner">
-                        {idx + 1}
+                      {/* Avatar with Medal Style */}
+                      <div className={`relative w-14 h-14 rounded-full flex-shrink-0 animate-in zoom-in duration-500 delay-${idx * 100}`}>
+                        <div className={`w-full h-full rounded-full overflow-hidden border-2 ${rStyle.border} ${rStyle.shadow} p-0.5 bg-white`}>
+                          {streak.profiles?.avatar_url ? (
+                            <img 
+                              src={streak.profiles.avatar_url} 
+                              alt={name} 
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          ) : (
+                            <div className={`w-full h-full rounded-full flex items-center justify-center font-serif font-bold text-lg ${rStyle.bg} ${rStyle.text}`}>
+                              {name.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        {idx < 3 && (
+                          <div className={`absolute -top-1 -right-1 w-6 h-6 rounded-full ${idx === 0 ? 'bg-gold' : idx === 1 ? 'bg-slate-400' : 'bg-amber-700'} flex items-center justify-center border-2 border-white shadow-sm`}>
+                            <Trophy size={12} className="text-white" />
+                          </div>
+                        )}
                       </div>
-                      <div className="pr-4">
-                        <h4 className="font-semibold font-sans text-navy-dark">{name}</h4>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold font-sans text-navy-dark truncate">{name}</h4>
+                          {isMe && <span className="text-[10px] bg-navy-dark text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter">Tú</span>}
+                        </div>
                         {streak.last_mission_note && (
-                          <p className="text-xs text-navy-dark/60 font-sans mt-1 line-clamp-2 italic">
+                          <p className="text-xs text-navy-dark/60 font-sans mt-0.5 line-clamp-1 italic">
                             "{streak.last_mission_note}"
                           </p>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-gold font-bold font-sans text-xl bg-white px-4 py-2 rounded-xl border border-gold/10 flex-shrink-0">
-                      <Flame size={20} className={idx < 3 ? "fill-gold" : "fill-transparent"} />
-                      {streak.streak_days}
+
+                    <div className="flex items-center gap-3">
+                      {/* Animar Button - for Top 10, not for self */}
+                      {idx < 10 && !isMe && (
+                        <button
+                          onClick={() => handleCheer(streak)}
+                          disabled={hasCheered || cheeringId === streak.user_id}
+                          className={`px-4 py-2 rounded-full font-sans font-bold text-xs transition-all flex items-center gap-2 ${
+                            hasCheered
+                              ? "bg-green-100 text-green-600 cursor-default"
+                              : "bg-navy-dark text-white hover:bg-gold hover:text-navy-dark shadow-md active:scale-95 disabled:opacity-50"
+                          }`}
+                        >
+                          {cheeringId === streak.user_id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : hasCheered ? (
+                            <>¡Ánimo enviado! ✨</>
+                          ) : (
+                            <>Animar 🔥</>
+                          )}
+                        </button>
+                      )}
+
+                      <div className={`flex items-center gap-2 ${rStyle.text} font-bold font-sans text-xl bg-white px-4 py-2 rounded-xl border ${rStyle.border} flex-shrink-0 min-w-[80px] justify-center`}>
+                        <Flame size={20} className={idx < 3 ? "fill-current animate-pulse" : "fill-transparent"} />
+                        {streak.streak_days}
+                      </div>
                     </div>
                   </div>
                 );
