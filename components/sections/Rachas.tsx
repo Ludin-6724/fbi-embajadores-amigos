@@ -18,10 +18,16 @@ type Streak = {
   } | null;
 };
 
-export default function Rachas({ communityId }: { communityId?: string }) {
+export default function Rachas({ 
+  communityId,
+  profile
+}: { 
+  communityId?: string,
+  profile?: any
+}) {
   const [topStreaks, setTopStreaks] = useState<Streak[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(profile?.id || null);
   const [myStreak, setMyStreak] = useState<Streak | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -63,14 +69,16 @@ export default function Rachas({ communityId }: { communityId?: string }) {
     }
 
     try {
-      // getUser y streaks en paralelo — ahorra 300-500ms
-      const [userResult, streaksResult] = await Promise.all([
-        supabase.auth.getUser(),
-        streaksQuery,
-      ]);
+      // If we already have a user ID, we can skip one parallel call
+      const promises: [Promise<any>, Promise<any>] = [
+        userId ? Promise.resolve({ data: { user: { id: userId } } }) : supabase.auth.getUser(),
+        Promise.resolve(streaksQuery),
+      ];
+
+      const [userResult, streaksResult] = await Promise.all(promises);
 
       const user = userResult.data?.user;
-      if (user) setUserId(user.id);
+      if (user && !userId) setUserId(user.id);
 
       const { data, error: streaksError } = streaksResult;
       

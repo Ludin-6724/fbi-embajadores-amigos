@@ -238,7 +238,7 @@ export default function Navbar({
 
             {user ? (
               <div className="flex items-center gap-2">
-                <NotificationCenter />
+                <NotificationCenter userId={user?.id || initialUser?.id} />
                 
                 <div className="relative" ref={dropdownRef}>
                   {/* Avatar trigger */}
@@ -358,7 +358,7 @@ export default function Navbar({
 
           {/* ── Mobile Notifications ── */}
           <div className="md:hidden flex items-center gap-3 z-50">
-            {user && <NotificationCenter />}
+            {(user || initialUser) && <NotificationCenter userId={user?.id || initialUser?.id} />}
           </div>
 
           {/* ── Mobile Menu ── */}

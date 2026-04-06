@@ -43,13 +43,25 @@ const POST_SELECT = `
   comments(id, author_id, parent_id, content, created_at, profiles(username, full_name, avatar_url))
 `.replace(/\n/g, " ").trim();
 
-export default function Comunidad({ communityId, initialTab = "muro", hideTabs = false, postId }: { communityId?: string, initialTab?: "muro" | "oratorio", hideTabs?: boolean, postId?: string }) {
+export default function Comunidad({ 
+  communityId, 
+  initialTab = "muro", 
+  hideTabs = false, 
+  postId,
+  initialProfile
+}: { 
+  communityId?: string, 
+  initialTab?: "muro" | "oratorio", 
+  hideTabs?: boolean, 
+  postId?: string,
+  initialProfile?: any
+}) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [openComments, setOpenComments] = useState<string | null>(null);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<"muro" | "oratorio">(initialTab);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(initialProfile?.id || null);
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string; snippet: string } | null>(null);
   const [newPostText, setNewPostText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -118,14 +130,16 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
     setError(null);
 
     try {
-      // getUser y posts query en paralelo — ahorra 300-500ms
-      const [userResult, postsResult] = await Promise.all([
-        supabase.auth.getUser(),
-        buildQuery(page),
-      ]);
+      // If we already have a user ID, we can skip one parallel call
+      const promises: [Promise<any>, Promise<any>] = [
+        userId ? Promise.resolve({ data: { user: { id: userId } } }) : supabase.auth.getUser(),
+        Promise.resolve(buildQuery(page)),
+      ];
+
+      const [userResult, postsResult] = await Promise.all(promises);
 
       const user = userResult.data?.user;
-      if (user) setUserId(user.id);
+      if (user && !userId) setUserId(user.id);
 
       const { data, error } = postsResult;
 

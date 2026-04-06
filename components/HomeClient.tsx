@@ -96,31 +96,37 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
     return (
       <div className="flex-1 flex flex-col">
         {/* TAB: FEED */}
-        <div style={{ display: activeTab === "feed" ? "block" : "none" }}>
-          <Hero profile={initialProfile} />
-          <Comunidad initialTab="muro" hideTabs={true} />
-          {/* Sub-comunidades ocultas temporalmente para otra versión */}
-          {/* <SubCommunities /> */}
-        </div>
+        {activeTab === "feed" && (
+          <div className="animate-in fade-in duration-500">
+            <Hero profile={initialProfile} />
+            <Comunidad initialTab="muro" hideTabs={true} initialProfile={initialProfile} />
+          </div>
+        )}
 
         {/* TAB: PRAYERS */}
-        <div style={{ display: activeTab === "prayers" ? "block" : "none" }}>
-          <div className="pt-20 bg-cream"></div>
-          <Comunidad initialTab="oratorio" hideTabs={true} />
-        </div>
+        {activeTab === "prayers" && (
+          <div className="animate-in fade-in duration-500">
+            <div className="pt-20 bg-cream"></div>
+            <Comunidad initialTab="oratorio" hideTabs={true} initialProfile={initialProfile} />
+          </div>
+        )}
 
         {/* TAB: STREAKS */}
-        <div style={{ display: activeTab === "streaks" ? "block" : "none" }}>
-          <div className="pt-20 bg-cream"></div>
-          <Rachas />
-        </div>
+        {activeTab === "streaks" && (
+          <div className="animate-in fade-in duration-500">
+            <div className="pt-20 bg-cream"></div>
+            <Rachas profile={initialProfile} />
+          </div>
+        )}
 
 
         {/* TAB: PROFILE */}
-        <div style={{ display: activeTab === "profile" ? "block" : "none" }}>
-          <div className="pt-20 bg-white"></div>
-          <ProfileSection profile={initialProfile} />
-        </div>
+        {activeTab === "profile" && (
+          <div className="animate-in fade-in duration-500">
+            <div className="pt-20 bg-white"></div>
+            <ProfileSection profile={initialProfile} />
+          </div>
+        )}
       </div>
     );
   };

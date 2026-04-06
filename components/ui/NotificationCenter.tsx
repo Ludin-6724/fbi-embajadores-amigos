@@ -17,7 +17,7 @@ type Notification = {
   actor_id?: string;
 };
 
-export default function NotificationCenter() {
+export default function NotificationCenter({ userId }: { userId?: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -30,9 +30,10 @@ export default function NotificationCenter() {
     let channel: any;
 
     const setupSubscription = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Use userId prop if present, else fallback to auth.getUser()
+      const currentUserId = userId || (await supabase.auth.getUser()).data?.user?.id;
       
-      if (!user || !mounted) {
+      if (!currentUserId || !mounted) {
         setLoading(false);
         setNotifications([]);
         setUnreadCount(0);
@@ -42,7 +43,7 @@ export default function NotificationCenter() {
       const { data } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -55,10 +56,10 @@ export default function NotificationCenter() {
       // Subscribe to real-time notifications
       if (mounted) {
         channel = supabase
-          .channel(`notifs_${user.id.substring(0, 8)}_${Math.random().toString(36).substring(7)}`)
+          .channel(`notifs_${currentUserId.substring(0, 8)}_${Math.random().toString(36).substring(7)}`)
           .on(
             'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+            { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` },
             (payload) => {
               if (!mounted) return;
               const newNotif = payload.new as Notification;
