@@ -43,7 +43,7 @@ const POST_SELECT = `
   comments(id, author_id, parent_id, content, created_at, profiles(username, full_name, avatar_url))
 `.replace(/\n/g, " ").trim();
 
-export default function Comunidad({ communityId, initialTab = "muro" }: { communityId?: string, initialTab?: "muro" | "oratorio" }) {
+export default function Comunidad({ communityId, initialTab = "muro", hideTabs = false }: { communityId?: string, initialTab?: "muro" | "oratorio", hideTabs?: boolean }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [openComments, setOpenComments] = useState<string | null>(null);
@@ -56,6 +56,11 @@ export default function Comunidad({ communityId, initialTab = "muro" }: { commun
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editPostText, setEditPostText] = useState("");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  // Sync activeTab with initialTab when it changes from outside
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const supabase = createClient();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -404,42 +409,46 @@ export default function Comunidad({ communityId, initialTab = "muro" }: { commun
       <div className="container mx-auto px-4 md:px-8">
         <div className="pt-8">
           {/* Header */}
-          <div className="flex flex-col items-center mb-8 text-center">
-            <span className="text-sm font-sans font-bold text-gold uppercase tracking-wider mb-2 inline-block">
-              Red FBI Oficial
-            </span>
-            <h3 className="text-3xl font-serif text-navy-dark font-bold flex items-center gap-3">
-              Muro de Agentes <MessageCircle className="text-gold" size={28} />
-            </h3>
-          </div>
+          {!hideTabs && (
+            <div className="flex flex-col items-center mb-8 text-center">
+              <span className="text-sm font-sans font-bold text-gold uppercase tracking-wider mb-2 inline-block">
+                Red FBI Oficial
+              </span>
+              <h3 className="text-3xl font-serif text-navy-dark font-bold flex items-center gap-3">
+                Muro de Agentes <MessageCircle className="text-gold" size={28} />
+              </h3>
+            </div>
+          )}
 
           {/* Tabs */}
-          <div className="flex justify-center mb-10">
-            <div className="bg-cream/50 p-1 border border-light-gray rounded-full flex gap-1">
-              <button
-                onClick={() => setActiveTab("muro")}
-                className={`px-6 py-2.5 rounded-full font-sans text-sm font-bold transition-all ${
-                  activeTab === "muro"
-                    ? "bg-white shadow text-navy-dark"
-                    : "text-navy-dark/60 hover:text-navy-dark hover:bg-cream"
-                }`}
-              >
-                Muro Principal
-              </button>
-              {userId && (
+          {!hideTabs && (
+            <div className="flex justify-center mb-10">
+              <div className="bg-cream/50 p-1 border border-light-gray rounded-full flex gap-1">
                 <button
-                  onClick={() => setActiveTab("oratorio")}
+                  onClick={() => setActiveTab("muro")}
                   className={`px-6 py-2.5 rounded-full font-sans text-sm font-bold transition-all ${
-                    activeTab === "oratorio"
+                    activeTab === "muro"
                       ? "bg-white shadow text-navy-dark"
                       : "text-navy-dark/60 hover:text-navy-dark hover:bg-cream"
                   }`}
                 >
-                  Oración Anónima
+                  Muro Principal
                 </button>
-              )}
+                {userId && (
+                  <button
+                    onClick={() => setActiveTab("oratorio")}
+                    className={`px-6 py-2.5 rounded-full font-sans text-sm font-bold transition-all ${
+                      activeTab === "oratorio"
+                        ? "bg-white shadow text-navy-dark"
+                        : "text-navy-dark/60 hover:text-navy-dark hover:bg-cream"
+                    }`}
+                  >
+                    Oración Anónima
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* New Post Form */}
           {userId && (

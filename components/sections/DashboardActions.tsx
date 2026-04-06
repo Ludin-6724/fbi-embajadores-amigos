@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PenSquare, UserMinus, Flame, Users, X, Loader2, Globe, Lock } from "lucide-react";
+import { PenSquare, UserMinus, Flame, Users, X, Loader2, Globe, Lock, Target, CheckCircle, PenTool, Rocket, MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type DashboardActionsProps = {
@@ -11,11 +11,16 @@ type DashboardActionsProps = {
 };
 
 export default function DashboardActions({ profile, isCommunity = false, hideVisuals = false }: DashboardActionsProps) {
-  const [activeModal, setActiveModal] = useState<"post" | "prayer" | "community" | null>(null);
+  const [activeModal, setActiveModal] = useState<"post" | "prayer" | "community" | "selector" | "streak" | null>(null);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [commPrivate, setCommPrivate] = useState(false);
+  
+  // Streak state
+  const [myStreak, setMyStreak] = useState<any>(null);
+  const [loadingStreak, setLoadingStreak] = useState(false);
+
   const supabase = createClient();
 
   const handleClose = () => {
@@ -30,17 +35,37 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     const handleOpenCommunity = () => setActiveModal("community");
     const handleOpenPost = () => setActiveModal("post");
     const handleOpenPrayer = () => setActiveModal("prayer");
+    const handleOpenSelector = () => setActiveModal("selector");
 
     window.addEventListener("fbi:open-community-modal", handleOpenCommunity);
     window.addEventListener("fbi:open-post-modal", handleOpenPost);
     window.addEventListener("fbi:open-prayer-modal", handleOpenPrayer);
+    window.addEventListener("fbi:open-publish-selector", handleOpenSelector);
+
+    if (activeModal === "streak") {
+        fetchMyStreak();
+    }
 
     return () => {
       window.removeEventListener("fbi:open-community-modal", handleOpenCommunity);
       window.removeEventListener("fbi:open-post-modal", handleOpenPost);
       window.removeEventListener("fbi:open-prayer-modal", handleOpenPrayer);
+      window.removeEventListener("fbi:open-publish-selector", handleOpenSelector);
     };
-  }, []);
+  }, [activeModal]);
+
+  const fetchMyStreak = async () => {
+    if (!profile?.id) return;
+    setLoadingStreak(true);
+    const { data } = await supabase
+        .from("streaks")
+        .select("*")
+        .eq("user_id", profile.id)
+        .is("community_id", null)
+        .maybeSingle();
+    setMyStreak(data);
+    setLoadingStreak(false);
+  };
 
   const handlePostSubmit = async (e: React.FormEvent, isAnonymous: boolean) => {
     e.preventDefault();
@@ -55,10 +80,60 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
 
     if (!error) {
       handleClose();
-      window.location.reload();
+      // Optimization: Refresh list via custom event if possible, otherwise reload
+      window.dispatchEvent(new CustomEvent("fbi:refresh-feed")); 
+      window.location.reload(); 
     } else {
       console.error(error);
       setFormError(`Error al publicar: ${error.message}`);
+      setSubmitting(false);
+    }
+  };
+
+  const handleStreakSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!content.trim() || !profile?.id || submitting) return;
+    setSubmitting(true);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let newDays = 1;
+
+    if (myStreak && myStreak.last_checkin) {
+      const last = new Date(myStreak.last_checkin);
+      last.setHours(0, 0, 0, 0);
+      const diffTime = today.getTime() - last.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) newDays = myStreak.streak_days;
+      else if (diffDays === 1) newDays = myStreak.streak_days + 1;
+      else newDays = 1;
+    }
+
+    const payload = {
+      user_id: profile.id,
+      streak_days: newDays,
+      last_checkin: new Date().toISOString(),
+      last_mission_title: "Misión Completada",
+      last_mission_note: content.trim(),
+      community_id: null
+    };
+
+    const { error: streakError } = await (myStreak 
+      ? supabase.from("streaks").update(payload).eq("id", myStreak.id)
+      : supabase.from("streaks").insert(payload));
+
+    if (!streakError) {
+      // Post to wall
+      await supabase.from("posts").insert({
+        author_id: profile.id,
+        content: `🔥 Misión completada - Día ${newDays}!\n\n"${content.trim()}"`,
+        is_anonymous: false
+      });
+      handleClose();
+      window.location.reload();
+    } else {
+      setFormError(`Error al guardar racha: ${streakError.message}`);
       setSubmitting(false);
     }
   };
@@ -138,7 +213,11 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
             {/* Header — sticky */}
             <div className="flex items-center justify-between p-5 sm:p-6 border-b border-light-gray bg-cream rounded-t-3xl flex-shrink-0">
               <h3 className="font-serif text-lg sm:text-xl font-bold text-navy-dark">
-                {activeModal === "post" ? "Crear Publicación" : activeModal === "prayer" ? "Petición Anónima" : "Nueva Comunidad"}
+                {activeModal === "selector" ? "Selecciona una Acción" : 
+                 activeModal === "post" ? "Crear Publicación" : 
+                 activeModal === "prayer" ? "Petición Anónima" : 
+                 activeModal === "streak" ? "Registrar Misión Diaria" :
+                 "Nueva Comunidad"}
               </h3>
               <button onClick={handleClose} className="text-navy-dark/50 hover:text-navy-dark p-1">
                 <X size={24} />
@@ -146,12 +225,53 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
             </div>
             
             {/* Body — scrollable */}
-            <form 
-             onSubmit={(e) => activeModal === "community" ? e.preventDefault() : handlePostSubmit(e, activeModal === "prayer")} 
-             className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1"
-            >
-              {activeModal === "community" ? (
-                <>
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              {activeModal === "selector" ? (
+                <div className="grid grid-cols-1 gap-4 py-4">
+                  <button 
+                    onClick={() => setActiveModal("post")}
+                    className="flex items-center gap-4 p-5 bg-gold/5 border border-gold/20 rounded-3xl hover:bg-gold/10 transition-all text-left group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-gold/20 flex items-center justify-center text-gold group-hover:scale-110 transition-transform">
+                      <PenSquare size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-serif font-bold text-navy-dark text-lg">Publicar en el Muro</h4>
+                      <p className="font-sans text-xs text-navy-dark/60 italic">Comparte tu luz con la comunidad</p>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => setActiveModal("prayer")}
+                    className="flex items-center gap-4 p-5 bg-navy-dark/5 border border-navy-dark/10 rounded-3xl hover:bg-navy-dark/10 transition-all text-left group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-navy-dark/10 flex items-center justify-center text-navy-dark group-hover:scale-110 transition-transform">
+                      <UserMinus size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-serif font-bold text-navy-dark text-lg">Petición Anónima</h4>
+                      <p className="font-sans text-xs text-navy-dark/60 italic">Oración confidencial para el oratorio</p>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => setActiveModal("streak")}
+                    className="flex items-center gap-4 p-5 bg-orange-500/5 border border-orange-500/10 rounded-3xl hover:bg-orange-500/10 transition-all text-left group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">
+                      <Flame size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-serif font-bold text-navy-dark text-lg">Reportar Misión FBI</h4>
+                      <p className="font-sans text-xs text-navy-dark/60 italic">Sube tu racha diaria de constancia</p>
+                    </div>
+                  </button>
+                </div>
+              ) : activeModal === "community" ? (
+                <form 
+                  onSubmit={(e) => e.preventDefault()} 
+                  className="space-y-4"
+                >
                  <div className="space-y-4">
                    <div>
                      <label className="block text-sm font-sans font-bold text-navy-dark mb-1">Nombre de la Comunidad</label>
@@ -257,14 +377,30 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                      {submitting ? <Loader2 className="animate-spin" size={18} /> : "Fundar Comunidad"}
                    </button>
                  </div>
-                </>
+                </form>
               ) : (
-                <>
+                <form 
+                  onSubmit={(e) => activeModal === "streak" ? handleStreakSubmit(e) : handlePostSubmit(e, activeModal === "prayer")} 
+                  className="space-y-4"
+                >
+                 {activeModal === "streak" && (
+                    <div className="bg-orange-500/5 p-4 rounded-2xl border border-orange-500/10 flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                            <Flame className="text-orange-600 fill-orange-600/20" size={24} />
+                            <span className="font-serif font-bold text-navy-dark">Tu Racha Actual</span>
+                        </div>
+                        <span className="text-2xl font-black text-orange-600">{myStreak?.streak_days || 0}</span>
+                    </div>
+                 )}
                  <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder={activeModal === "post" ? "¿Qué luz vas a compartir hoy con la comunidad?" : "Escribe tu petición o testimonio de forma completamente anónima..."}
-                  className="w-full min-h-[120px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
+                  placeholder={
+                    activeModal === "post" ? "¿Qué luz vas a compartir hoy con la comunidad?" : 
+                    activeModal === "prayer" ? "Escribe tu petición o testimonio de forma completamente anónima..." :
+                    "Reporta tu misión completada. Ej: 'Hoy recordé mi identidad en Cristo y oré 15min'."
+                  }
+                  className="w-full min-h-[150px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
                   required
                  />
                  {formError && (
@@ -276,14 +412,15 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                    <button 
                      type="submit" 
                      disabled={submitting || !content.trim()}
-                     className="px-6 py-3 bg-gold hover:bg-gold/90 disabled:opacity-50 text-white font-sans font-semibold rounded-full transition-all shadow-md flex items-center gap-2"
+                     className={`px-8 py-4 ${activeModal === "streak" ? "bg-orange-600" : "bg-gold"} hover:opacity-90 disabled:opacity-50 text-white font-sans font-bold rounded-2xl transition-all shadow-md flex items-center gap-2`}
                    >
-                     {submitting ? <Loader2 className="animate-spin" size={18} /> : "Publicar Mensaje"}
+                     {submitting ? <Loader2 className="animate-spin" size={18} /> : 
+                      activeModal === "streak" ? "Registrar y Publicar Racha" : "Publicar Mensaje"}
                    </button>
                  </div>
-                </>
+                </form>
               )}
-            </form>
+            </div>
           </div>
         </div>
       )}

@@ -18,10 +18,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
 
   const handleTabChange = (tab: TabType) => {
     if (tab === "publish") {
-        // Trigger the "Nueva Publicación" modal via DashboardActions or custom logic
-        // For now, if we are in Feed or Prayers, we can show the creation form or trigger the modal.
-        // Let's use a simpler way: if "publish" is clicked, trigger a modal.
-        const event = new CustomEvent("fbi:open-post-modal");
+        const event = new CustomEvent("fbi:open-publish-selector");
         window.dispatchEvent(event);
         return;
     }
@@ -32,10 +29,10 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
   // Helper to sync tab with "DashboardActions" if needed
   useEffect(() => {
     const handleOpenPost = () => {
-        // If we want to open a specific modal
+        // If we want to open a v2 selector 
     };
-    window.addEventListener("fbi:open-post-modal", handleOpenPost);
-    return () => window.removeEventListener("fbi:open-post-modal", handleOpenPost);
+    window.addEventListener("fbi:open-publish-selector", handleOpenPost);
+    return () => window.removeEventListener("fbi:open-publish-selector", handleOpenPost);
   }, []);
 
   const renderContent = () => {
@@ -44,7 +41,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
         return (
           <>
             <Hero profile={initialProfile} />
-            <Comunidad initialTab="muro" />
+            <Comunidad initialTab="muro" hideTabs={true} />
             <SubCommunities />
           </>
         );
@@ -52,7 +49,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
         return (
           <>
             <div className="pt-20 bg-cream"></div>
-            <Comunidad initialTab="oratorio" />
+            <Comunidad initialTab="oratorio" hideTabs={true} />
           </>
         );
       case "streaks":
@@ -81,7 +78,7 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
         {initialProfile && (
           <DashboardActions 
             profile={initialProfile} 
-            hideVisuals={activeTab !== "feed"} 
+            hideVisuals={true} 
           />
         )}
         {renderContent()}
