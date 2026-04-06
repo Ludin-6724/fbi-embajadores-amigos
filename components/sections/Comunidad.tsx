@@ -11,6 +11,7 @@ type ReactionRow = { id: string; user_id: string; reaction: ReactionType };
 type CommentPreview = {
   id: string; post_id: string; author_id: string; parent_id: string | null; content: string; created_at: string;
   profiles: { username: string | null; avatar_url: string | null } | null;
+  comment_reactions?: ReactionRow[];
 };
 type Post = {
   id: string; author_id: string; content: string;
@@ -115,7 +116,7 @@ export default function Comunidad({
         const ids = fetched.map(p => p.id);
         let q = supabase
           .from("comments")
-          .select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url)")
+          .select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url), comment_reactions(id, user_id, reaction)")
           .in("post_id", ids)
           .order("created_at", { ascending: false });
           
@@ -203,6 +204,51 @@ export default function Comunidad({
       if (data) setPosts(prev => prev.map(p => p.id === pId
         ? { ...p, post_reactions: p.post_reactions.map(r => r.id === "temp" ? data : r) } : p));
     }
+  };
+
+  const handleToggleCommentReaction = async (commentId: string, postId: string, type: ReactionType) => {
+    if (!userId) {
+      showToast("Inicia sesión para reaccionar", false);
+      return;
+    }
+    
+    const currentPreviews = commentPreviews[postId] || [];
+    const comment = currentPreviews.find(c => c.id === commentId);
+    if (!comment) return;
+    
+    const existingReaction = comment.comment_reactions?.find(r => r.user_id === userId);
+    const isRemoving = existingReaction && existingReaction.reaction === type;
+    const isSwitching = existingReaction && existingReaction.reaction !== type;
+
+    setCommentPreviews(prev => {
+      const ps = prev[postId] || [];
+      return {
+        ...prev,
+        [postId]: ps.map(c => {
+          if (c.id !== commentId) return c;
+          let newReactions = [...(c.comment_reactions || [])];
+          if (isRemoving) {
+            newReactions = newReactions.filter(r => r.user_id !== userId);
+          } else if (isSwitching) {
+            newReactions = newReactions.map(r => r.user_id === userId ? { ...r, reaction: type } : r);
+          } else {
+            newReactions.push({ id: "temp", user_id: userId, reaction: type });
+          }
+          return { ...c, comment_reactions: newReactions };
+        })
+      };
+    });
+
+    try {
+      if (isRemoving) {
+        await sbRef.current.from("comment_reactions").delete().eq("user_id", userId).eq("comment_id", commentId);
+      } else if (isSwitching) {
+        await sbRef.current.from("comment_reactions").delete().eq("user_id", userId).eq("comment_id", commentId);
+        await sbRef.current.from("comment_reactions").insert({ comment_id: commentId, user_id: userId, reaction: type });
+      } else {
+        await sbRef.current.from("comment_reactions").insert({ comment_id: commentId, user_id: userId, reaction: type });
+      }
+    } catch (e) { }
   };
 
   const handleAddComment = async (pId: string) => {
@@ -486,19 +532,27 @@ export default function Comunidad({
                   {(previews.length > 0 || postId) && (
                     <div className="px-4 pb-4 pt-4 border-t border-gray-50 space-y-4">
                       {!postId ? previews.slice(0,2).map(c => (
-                        <div key={c.id} className="flex gap-3">
+                        <Link href={`/post/${post.id}`} key={c.id} className="flex gap-3 hover:bg-gray-50 p-2 rounded-2xl transition-all -mx-2">
                           <div className="w-8 h-8 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
                             {c.profiles?.avatar_url
                               ? <img src={c.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                               : (c.profiles?.username?.[0]?.toUpperCase() ?? "A")}
                           </div>
-                          <div className="flex-1 bg-gray-50/80 rounded-2xl px-4 py-2.5">
+                          <div className="flex-1 bg-gray-50/80 rounded-2xl px-4 py-2.5 shadow-sm border border-gray-100/50">
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <p className="text-[12px] font-bold text-navy-dark">{c.profiles?.username || "Agente"}</p>
                             </div>
                             <p className="text-xs text-navy-dark/80 leading-relaxed line-clamp-2">{c.content}</p>
+                            {c.comment_reactions && c.comment_reactions.length > 0 && (
+                              <div className="flex items-center gap-1 mt-1.5 opacity-80">
+                                {Array.from(new Set(c.comment_reactions.map(r => r.reaction))).slice(0, 2).map(t => (
+                                  <span key={t} className="text-[10px] leading-none">{emojiMap[t]}</span>
+                                ))}
+                                <span className="text-[9px] text-navy-dark/50 font-medium">{c.comment_reactions.length}</span>
+                              </div>
+                            )}
                           </div>
-                        </div>
+                        </Link>
                       )) : previews.filter(c => !c.parent_id).map(rootC => (
                         <div key={rootC.id} className="space-y-3">
                           {/* ROOT COMMENT */}
@@ -539,8 +593,25 @@ export default function Comunidad({
                               </div>
                               {/* Reply Action */}
                               {!editingCommentId && (
-                                <div className="px-4 mt-1">
-                                  <button onClick={() => setReplyingTo({ id: rootC.id, username: rootC.profiles?.username || "Agente" })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors">Responder</button>
+                                <div className="px-4 mt-1 flex items-center gap-4">
+                                  <ReactionPicker
+                                    onSelect={t => handleToggleCommentReaction(rootC.id, post.id, t)}
+                                    disabled={!userId}
+                                    currentReaction={rootC.comment_reactions?.find(r => r.user_id === userId)?.reaction}
+                                  >
+                                    <button className={`text-[10px] font-bold transition-colors select-none ${rootC.comment_reactions?.some(r => r.user_id === userId) ? "text-gold" : "text-navy-dark/40 hover:text-gold"}`}>
+                                      {rootC.comment_reactions?.some(r => r.user_id === userId) ? labelMap[rootC.comment_reactions.find(r => r.user_id === userId)!.reaction] : "Reaccionar"}
+                                    </button>
+                                  </ReactionPicker>
+                                  <button onClick={() => setReplyingTo({ id: rootC.id, username: rootC.profiles?.username || "Agente" })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
+                                  {rootC.comment_reactions && rootC.comment_reactions.length > 0 && (
+                                    <div className="flex items-center gap-0.5 ml-auto">
+                                      {Array.from(new Set(rootC.comment_reactions.map(r => r.reaction))).slice(0, 3).map(t => (
+                                        <span key={t} className="text-[10px] leading-none">{emojiMap[t]}</span>
+                                      ))}
+                                      <span className="text-[9px] text-navy-dark/40 ml-0.5">{rootC.comment_reactions.length}</span>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -585,6 +656,28 @@ export default function Comunidad({
                                       <p className="text-[11px] text-navy-dark/80 leading-relaxed whitespace-pre-wrap">{reply.content}</p>
                                     )}
                                   </div>
+                                  {/* Sub-Reply actions */}
+                                  {!editingCommentId && (
+                                    <div className="px-3 mt-1 flex items-center gap-3">
+                                      <ReactionPicker
+                                        onSelect={t => handleToggleCommentReaction(reply.id, post.id, t)}
+                                        disabled={!userId}
+                                        currentReaction={reply.comment_reactions?.find(r => r.user_id === userId)?.reaction}
+                                      >
+                                        <button className={`text-[9px] font-bold transition-colors select-none ${reply.comment_reactions?.some(r => r.user_id === userId) ? "text-gold" : "text-navy-dark/40 hover:text-gold"}`}>
+                                          {reply.comment_reactions?.some(r => r.user_id === userId) ? labelMap[reply.comment_reactions.find(r => r.user_id === userId)!.reaction] : "Me gusta"}
+                                        </button>
+                                      </ReactionPicker>
+                                      {reply.comment_reactions && reply.comment_reactions.length > 0 && (
+                                        <div className="flex items-center gap-0.5 ml-auto">
+                                          {Array.from(new Set(reply.comment_reactions.map(r => r.reaction))).slice(0, 2).map(t => (
+                                            <span key={t} className="text-[9px] leading-none">{emojiMap[t]}</span>
+                                          ))}
+                                          <span className="text-[8px] text-navy-dark/40 ml-0.5">{reply.comment_reactions.length}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             ))}
