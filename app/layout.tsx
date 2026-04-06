@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import PWAProvider from "@/components/providers/PWAProvider";
+import UpdateBanner from "@/components/providers/UpdateBanner";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -37,7 +38,10 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </head>
       <body className="min-h-full flex flex-col font-sans">
-        <PWAProvider>{children}</PWAProvider>
+        <PWAProvider>
+          {children}
+          <UpdateBanner />
+        </PWAProvider>
       </body>
     </html>
   );

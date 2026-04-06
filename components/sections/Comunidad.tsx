@@ -436,6 +436,63 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
   const userHasReacted = (post: Post, type: string) =>
     userId ? post.post_reactions.some(r => r.user_id === userId && r.reaction === type) : false;
 
+  const timeAgo = (dateStr: string): string => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "ahora";
+    if (mins < 60) return `hace ${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `hace ${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `hace ${days}d`;
+    return new Date(dateStr).toLocaleDateString("es-ES", { month: "short", day: "numeric" });
+  };
+
+  const renderCommentNode = (comment: CommentRow, allComments: CommentRow[], postId: string, depth = 0): React.ReactNode => {
+    const replies = allComments.filter(c => c.parent_id === comment.id);
+    return (
+      <div key={comment.id} className={`${depth > 0 ? "ml-8 mt-2 border-l-2 border-gold/10 pl-4" : ""}`}>
+        <div className="flex gap-3 group/comment">
+          <div className="w-8 h-8 rounded-full bg-white flex-shrink-0 flex items-center justify-center font-serif text-sm font-bold text-gold border border-light-gray overflow-hidden">
+            {comment.profiles?.avatar_url ? (
+              <img src={comment.profiles.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+            ) : (
+              (comment.profiles?.username || "A")[0].toUpperCase()
+            )}
+          </div>
+          <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-light-gray shadow-sm flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-0.5">
+              <p className="font-semibold font-sans text-xs text-navy-dark truncate">
+                {comment.profiles?.username || comment.profiles?.full_name || "Agente"}
+              </p>
+              <div className="flex items-center gap-1 opacity-0 group-hover/comment:opacity-100 transition-all">
+                {userId && (
+                  <button
+                    onClick={() => setReplyingTo({ id: comment.id, username: comment.profiles?.username || "agente" })}
+                    className="text-gold hover:text-gold/80 text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5"
+                  >
+                    Responder
+                  </button>
+                )}
+                {userId === comment.author_id && (
+                  <button
+                    onClick={() => handleDeleteComment(postId, comment.id)}
+                    className="text-red-400 hover:text-red-600 p-0.5"
+                    title="Eliminar"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-sm font-sans text-navy-dark/80 break-words">{comment.content}</p>
+          </div>
+        </div>
+        {replies.map(r => renderCommentNode(r, allComments, postId, depth + 1))}
+      </div>
+    );
+  };
+
   /* ═══════════════════════════════════════════════════
      JSX
      ═══════════════════════════════════════════════════ */
@@ -567,9 +624,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
             <>
               <div className="space-y-6 max-w-2xl mx-auto">
               {posts.map(post => {
-                const postDate = new Date(post.created_at).toLocaleDateString("es-ES", {
-                  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                });
+                const postDate = timeAgo(post.created_at);
                 const isAnonymous = post.is_anonymous === true;
                 const displayName = isAnonymous
                   ? "Agente Anónimo"
@@ -656,8 +711,7 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                     )}
 
                     {/* Reactions Bar */}
-                    <div className="flex flex-wrap items-center gap-2 mb-2 border-t border-light-gray pt-4">
-                      {/* Like */}
+                    <div className="flex flex-wrap items-center gap-2 border-t border-light-gray pt-4">
                       <button
                         onClick={() => handleToggleReaction(post.id, "like")}
                         className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
@@ -669,8 +723,6 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                         <Heart size={15} className={userHasReacted(post, "like") ? "fill-gold text-gold" : ""} />
                         {likes > 0 && likes}
                       </button>
-
-                      {/* Amen */}
                       <button
                         onClick={() => handleToggleReaction(post.id, "amen")}
                         className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
@@ -681,8 +733,6 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                       >
                         🙏 {amens > 0 && amens}
                       </button>
-
-                      {/* Pray */}
                       <button
                         onClick={() => handleToggleReaction(post.id, "pray")}
                         className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
@@ -693,126 +743,89 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                       >
                         🙌 {prays > 0 && prays}
                       </button>
-
                       <div className="flex-1" />
-
-                      {/* Comments toggle */}
                       <button
-                        onClick={() => setOpenComments(openComments === post.id ? null : post.id)}
+                        onClick={() => {
+                          const next = openComments === post.id ? null : post.id;
+                          setOpenComments(next);
+                          if (next && !fullComments[post.id] && (post.total_comments ?? post.comments.length) > 2) {
+                            fetchFullComments(post.id);
+                          }
+                        }}
                         className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                           openComments === post.id
                             ? "bg-navy-dark/10 text-navy-dark"
                             : "bg-cream hover:bg-navy-dark/5 text-navy-dark/60"
                         }`}
                       >
-                        <MessageSquare size={15} /> {post.comments.length > 0 && post.comments.length}
+                        <MessageSquare size={15} />
+                        {(post.total_comments ?? post.comments.length) > 0 && (post.total_comments ?? post.comments.length)}
                       </button>
                     </div>
 
-                    {/* Comments Panel */}
-                    {openComments === post.id && (
-                      <div className="mt-3 pt-4 border-t border-light-gray bg-cream/20 -mx-6 -mb-6 p-6 rounded-b-2xl">
-                        {/* Comment list */}
-                        <div className="space-y-4 mb-4">
-                          {(() => {
-                            const postComments = fullComments[post.id] || post.comments;
-                            const isExpanded = !!fullComments[post.id];
-                            
-                            if (fetchingFull[post.id]) {
-                                return (
-                                    <div className="flex justify-center py-4">
-                                        <Loader2 size={24} className="animate-spin text-gold" />
-                                    </div>
-                                );
-                            }
-
-                            if (postComments.length === 0) {
-                              return (
-                                <p className="text-center text-xs text-navy-dark/50 italic py-2">
-                                  Nadie ha comentado aún. Sé el primero.
-                                </p>
-                              );
-                            }
-
-                            // Helper for rendering one comment and its children
-                            const renderComment = (comment: CommentRow, depth = 0) => {
-                              const replies = postComments.filter(c => c.parent_id === comment.id);
-                              return (
-                                <div key={comment.id} className={`${depth > 0 ? "ml-8 mt-2 border-l-2 border-gold/10 pl-4" : ""}`}>
-                                  <div className="flex gap-3 group/comment">
-                                    <div className="w-8 h-8 rounded-full bg-white flex-shrink-0 flex items-center justify-center font-serif text-sm font-bold text-gold border border-light-gray overflow-hidden">
+                    {/* Comments Section — always visible (Facebook-style) */}
+                    {(post.comments.length > 0 || userId) && (
+                      <div className="mt-3 pt-3 border-t border-light-gray">
+                        {openComments === post.id ? (
+                          /* EXPANDED: full hierarchical comment list */
+                          <div className="space-y-3 mb-3 max-h-96 overflow-y-auto pr-1">
+                            {fetchingFull[post.id] ? (
+                              <div className="flex justify-center py-4">
+                                <Loader2 size={20} className="animate-spin text-gold" />
+                              </div>
+                            ) : (() => {
+                              const postComments = fullComments[post.id] || post.comments;
+                              if (postComments.length === 0) {
+                                return <p className="text-center text-xs text-navy-dark/50 italic py-2">Nadie ha comentado aún. Sé el primero.</p>;
+                              }
+                              const roots = fullComments[post.id]
+                                ? postComments.filter(c => !c.parent_id)
+                                : postComments;
+                              return roots.map(c => renderCommentNode(c, postComments, post.id));
+                            })()}
+                          </div>
+                        ) : (
+                          /* PREVIEW: últimos 2 comentarios siempre visibles */
+                          <>
+                            {(post.total_comments ?? 0) > post.comments.length && (
+                              <button
+                                onClick={() => { setOpenComments(post.id); fetchFullComments(post.id); }}
+                                className="block text-xs font-bold text-navy-dark/50 hover:text-gold mb-2 transition-colors"
+                              >
+                                Ver todos los {post.total_comments} comentarios
+                              </button>
+                            )}
+                            {post.comments.length > 0 && (
+                              <div className="space-y-1.5 mb-2">
+                                {post.comments.slice(0, 2).map(comment => (
+                                  <div key={comment.id} className="flex gap-2 items-start">
+                                    <div className="w-6 h-6 rounded-full bg-cream flex-shrink-0 flex items-center justify-center font-serif text-xs font-bold text-gold border border-light-gray overflow-hidden">
                                       {comment.profiles?.avatar_url ? (
-                                        <img src={comment.profiles.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                                        <img src={comment.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                                       ) : (
                                         (comment.profiles?.username || "A")[0].toUpperCase()
                                       )}
                                     </div>
-                                    <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-light-gray shadow-sm flex-1 min-w-0">
-                                      <div className="flex items-center justify-between gap-2 mb-0.5">
-                                        <p className="font-semibold font-sans text-xs text-navy-dark truncate">
-                                          {comment.profiles?.username || comment.profiles?.full_name || "Agente"}
-                                        </p>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover/comment:opacity-100 transition-all">
-                                          {userId && (
-                                            <button
-                                                onClick={() => setReplyingTo({ id: comment.id, username: comment.profiles?.username || "agente" })}
-                                                className="text-gold hover:text-gold/80 text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5"
-                                            >
-                                                Responder
-                                            </button>
-                                          )}
-                                          {userId === comment.author_id && (
-                                            <button
-                                              onClick={() => handleDeleteComment(post.id, comment.id)}
-                                              className="text-red-400 hover:text-red-600 p-0.5"
-                                              title="Eliminar"
-                                            >
-                                              <Trash2 size={11} />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <p className="text-sm font-sans text-navy-dark/80 break-words">{comment.content}</p>
-                                    </div>
+                                    <p className="text-sm font-sans text-navy-dark/80 leading-snug">
+                                      <span className="font-bold text-navy-dark">{comment.profiles?.username || comment.profiles?.full_name || "Agente"} </span>
+                                      {comment.content}
+                                    </p>
                                   </div>
-                                  {replies.map(r => renderComment(r, depth + 1))}
-                                </div>
-                              );
-                            };
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
 
-                            // On feed (not expanded), only show root comments (those without parent_id in current list)
-                            // or just show the flat list if it's the preview.
-                            if (!isExpanded) {
-                                return (
-                                    <>
-                                        {postComments.map(c => renderComment(c))}
-                                        {post.total_comments && post.total_comments > 2 && !isExpanded && (
-                                            <button 
-                                                onClick={() => fetchFullComments(post.id)}
-                                                className="w-full text-left py-2 text-xs font-bold text-navy-dark/40 hover:text-gold transition-colors"
-                                            >
-                                                Ver los {post.total_comments} comentarios
-                                            </button>
-                                        )}
-                                    </>
-                                );
-                            }
-
-                            // Full view: hierarchical
-                            const rootComments = postComments.filter(c => !c.parent_id);
-                            return rootComments.map(c => renderComment(c));
-                          })()}
-                        </div>
-
-                        {/* Comment input */}
+                        {/* Input de comentario — siempre visible para usuarios autenticados */}
                         {userId && (
-                          <div className="flex flex-col gap-2">
-                            {replyingTo && (
-                              <div className="flex items-center justify-between px-4 py-1 bg-gold/10 rounded-lg animate-fade-in mb-1">
+                          <div className="flex flex-col gap-1.5 mt-2">
+                            {replyingTo && openComments === post.id && (
+                              <div className="flex items-center justify-between px-3 py-1 bg-gold/10 rounded-lg animate-fade-in">
                                 <p className="text-[10px] font-bold text-gold uppercase tracking-wider">
                                   Respondiendo a @{replyingTo.username}
                                 </p>
-                                <button 
+                                <button
                                   onClick={() => setReplyingTo(null)}
                                   className="text-gold hover:text-navy-dark transition-colors"
                                 >
@@ -825,17 +838,17 @@ export default function Comunidad({ communityId, initialTab = "muro", hideTabs =
                                 type="text"
                                 value={commentTexts[post.id] || ""}
                                 onChange={e => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))}
-                                placeholder={replyingTo ? `Escribe una respuesta...` : "Escribe un comentario..."}
-                                className="flex-1 text-sm py-2.5 px-4 rounded-full border border-light-gray bg-white focus:border-gold outline-none font-sans"
+                                placeholder={replyingTo && openComments === post.id ? "Escribe una respuesta..." : "Escribe un comentario..."}
+                                className="flex-1 text-sm py-2 px-4 rounded-full border border-light-gray bg-white focus:border-gold outline-none font-sans"
+                                onFocus={() => { if (openComments !== post.id) setOpenComments(post.id); }}
                                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleSubmitComment(post.id); } }}
-                                autoFocus={!!replyingTo}
                               />
                               <button
                                 disabled={!(commentTexts[post.id] || "").trim()}
                                 onClick={() => handleSubmitComment(post.id)}
-                                className="bg-navy-dark text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-navy-dark/90 transition-colors disabled:opacity-40 flex-shrink-0"
+                                className="bg-navy-dark text-white w-9 h-9 rounded-full flex items-center justify-center hover:bg-navy-dark/90 transition-colors disabled:opacity-40 flex-shrink-0"
                               >
-                                <Send size={14} />
+                                <Send size={13} />
                               </button>
                             </div>
                           </div>
