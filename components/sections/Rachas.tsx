@@ -438,6 +438,11 @@ export default function Rachas({ communityId }: { communityId?: string }) {
                     } hover:scale-[1.01] duration-300`}
                   >
                     <div className="flex items-center gap-4">
+                      {/* Ranking Number */}
+                      <div className={`w-6 text-center font-serif font-black ${idx < 3 ? rStyle.text + ' text-xl' : 'text-navy-dark/20 text-base'}`}>
+                        {idx + 1}
+                      </div>
+
                       {/* Avatar with Medal Style */}
                       <div className={`relative w-14 h-14 rounded-full flex-shrink-0 animate-in zoom-in duration-500 delay-${idx * 100}`}>
                         <div className={`w-full h-full rounded-full overflow-hidden border-2 ${rStyle.border} ${rStyle.shadow} p-0.5 bg-white`}>
