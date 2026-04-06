@@ -333,6 +333,18 @@ export default function Comunidad({
               </div>
             )}
 
+            {/* Header Oración */}
+            {activeTab === "oratorio" && !hideTabs && (
+              <div className="bg-white rounded-3xl p-6 text-center border border-gold/20 shadow-sm mb-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gold/5 rounded-bl-full pointer-events-none" />
+                <h3 className="font-serif text-2xl font-bold text-navy-dark mb-2">Peticiones de Oración</h3>
+                <p className="text-sm text-navy-dark/70 font-sans italic max-w-sm mx-auto leading-relaxed">
+                  "Y todo lo que pidiereis en oración, creyendo, lo recibiréis."
+                </p>
+                <p className="text-[10px] font-bold text-gold uppercase tracking-widest mt-3">Mateo 21:22 (RVR1960)</p>
+              </div>
+            )}
+
             {/* Posts */}
             {posts.map(post => {
               const name = post.is_anonymous ? "Agente Anónimo" : (post.profiles?.full_name || post.profiles?.username || "Agente");

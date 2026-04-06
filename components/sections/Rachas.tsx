@@ -70,14 +70,19 @@ export default function Rachas({
       else streaksQuery = streaksQuery.is('community_id', null);
 
       const { data, error: streaksError } = await streaksQuery;
-      
+
+      const isTestUser = (s: any) => 
+        s.user_id === '11111111-1111-1111-1111-111111111111' || 
+        s.profiles?.full_name?.toLowerCase().includes('agente base') ||
+        s.profiles?.username?.toLowerCase().includes('agente base');
+
       if (streaksError) {
         console.warn("Retrying streak fetch:", streaksError.message);
-        const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, user_id, profiles(username)").limit(5);
+        const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, user_id, profiles(username)").limit(10);
         if (fbErr) throw fbErr;
-        setTopStreaks(fallback as any);
+        setTopStreaks(((fallback as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 5));
       } else {
-        setTopStreaks((data as any) || []);
+        setTopStreaks(((data as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10));
       }
 
       // Check self streak using existing userId
