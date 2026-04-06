@@ -267,3 +267,8 @@
 {"timestamp":"01:17:39.967","source":"Browser","level":"ERROR","message":"uncaughtError: Error: Internal Next.js error: Router action dispatched before initialization."}
 {"timestamp":"01:17:39.967","source":"Browser","level":"ERROR","message":"uncaughtError: Error: Internal Next.js error: Router action dispatched before initialization."}
 {"timestamp":"01:17:45.446","source":"Server","level":"LOG","message":"✓ Compiled in 16ms"}
+{"timestamp":"01:22:33.903","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"01:22:33.944","source":"Browser","level":"LOG","message":"PWA: BeforeInstallPrompt event captured at root"}
+{"timestamp":"01:22:35.478","source":"Browser","level":"LOG","message":"New content is available; please refresh."}
+{"timestamp":"01:26:53.721","source":"Server","level":"LOG","message":"✓ Compiled in 30ms"}
+{"timestamp":"01:26:59.246","source":"Server","level":"LOG","message":"✓ Compiled in 15ms"}
