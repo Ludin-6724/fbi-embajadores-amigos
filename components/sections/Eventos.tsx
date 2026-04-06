@@ -24,9 +24,9 @@ export default function Eventos() {
       .select("id, title, description, event_date, location, tag")
       .order("event_date", { ascending: true })
       .limit(3)
-      .then(({ data, error }) => {
+      .then(({ data, error }: { data: Evento[] | null; error: any }) => {
         if (error) console.error("Eventos fetch error:", error.message);
-        else setEventos((data as Evento[]) ?? []);
+        else setEventos(data ?? []);
         setLoading(false);
       });
   }, []);

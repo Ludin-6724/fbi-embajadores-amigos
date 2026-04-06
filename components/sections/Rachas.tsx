@@ -85,7 +85,7 @@ export default function Rachas({
         const mine = (data as any)?.find((s: any) => s.user_id === userId);
         if (mine) setMyStreak(mine);
         else {
-          supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle().then(({ data: myD }) => {
+          supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle().then(({ data: myD }: { data: any; error: any }) => {
             if (myD) setMyStreak(myD as any);
           });
         }
@@ -112,7 +112,7 @@ export default function Rachas({
     if (communityId) myQuery = myQuery.eq('community_id', communityId);
     else myQuery = myQuery.is('community_id', null);
 
-    myQuery.maybeSingle().then(({ data: myData }) => {
+    myQuery.maybeSingle().then(({ data: myData }: { data: any; error: any }) => {
       if (myData) {
         setMyStreak(myData as unknown as Streak);
       } else {
@@ -123,7 +123,7 @@ export default function Rachas({
           .eq("user_id", uId);
         if (communityId) fallbackQ = fallbackQ.eq("community_id", communityId);
         else fallbackQ = fallbackQ.is("community_id", null);
-        fallbackQ.maybeSingle().then(({ data: fb }) => {
+        fallbackQ.maybeSingle().then(({ data: fb }: { data: any; error: any }) => {
           if (fb) setMyStreak(fb as unknown as Streak);
         });
       }

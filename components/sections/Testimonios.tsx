@@ -23,9 +23,9 @@ export default function Testimonios() {
       .select("id, name, role, story, image_url")
       .order("created_at", { ascending: false })
       .limit(3)
-      .then(({ data, error }) => {
+      .then(({ data, error }: { data: Testimonio[] | null; error: any }) => {
         if (error) console.error("Testimonios fetch error:", error.message);
-        else setTestimonios((data as Testimonio[]) ?? []);
+        else setTestimonios(data ?? []);
         setLoading(false);
       });
   }, []);

@@ -49,7 +49,7 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
 
       if (mounted && data) {
         setNotifications(data as Notification[]);
-        setUnreadCount(data.filter(n => !n.is_read).length);
+        setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
         setLoading(false);
       }
 
@@ -60,7 +60,7 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
           .on(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` },
-            (payload) => {
+            (payload: { new: Record<string, any> }) => {
               if (!mounted) return;
               const newNotif = payload.new as Notification;
               setNotifications(prev => [newNotif, ...prev]);
@@ -138,7 +138,7 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
 
     if (data) {
       setNotifications(data as Notification[]);
-      setUnreadCount(data.filter(n => !n.is_read).length);
+      setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
     }
     setLoading(false);
   };
