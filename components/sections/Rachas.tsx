@@ -303,9 +303,14 @@ export default function Rachas({
             <h2 className="text-4xl md:text-5xl font-serif font-bold text-navy-dark leading-tight mb-6">
               Rachas de Agentes Nacional
             </h2>
-            <p className="font-sans text-lg text-navy-dark/70 leading-relaxed max-w-xl">
+            <p className="font-sans text-lg text-navy-dark/70 leading-relaxed max-w-xl mb-4">
               Recuerda hacer algo diferente hoy y marcar tu racha, algo que implique no ser arrastrado por el algoritmo. Cualquier detalle cuenta.
             </p>
+            <div className="bg-gold/10 inline-block px-4 py-2 rounded-xl border border-gold/20">
+              <p className="font-sans text-sm text-gold font-bold">
+                🏆 En el próximo congreso será premiado el agente con la mayor racha.
+              </p>
+            </div>
           </div>
 
           <div className="flex-1 w-full flex justify-center">
