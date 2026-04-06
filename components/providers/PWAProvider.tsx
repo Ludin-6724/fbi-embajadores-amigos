@@ -1,18 +1,43 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-export default function PWAProvider({ children }: { children: React.ReactNode }) {
+interface PWAContextType {
+  deferredPrompt: any;
+  isInstallable: boolean;
+  promptInstall: () => Promise<void>;
+  isIOS: boolean;
+}
+
+const PWAContext = createContext<PWAContextType | undefined>(undefined);
+
+export function usePWA() {
+  const context = useContext(PWAContext);
+  if (context === undefined) {
+    throw new Error("usePWA must be used within a PWAProvider");
+  }
+  return context;
+}
+
+export default function PWAProvider({ children }: { children: ReactNode }) {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+
   useEffect(() => {
-    // 1. Register Service Worker
+    // 1. Detect device
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+    setIsIOS(isIOSDevice && !isStandalone);
+
+    // 2. Register Service Worker
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
           .register("/sw.js")
           .then((registration) => {
             console.log("SW registered:", registration.scope);
-
-            // Check for updates on register
             registration.onupdatefound = () => {
               const installingWorker = registration.installing;
               if (installingWorker) {
@@ -30,17 +55,17 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
       });
     }
 
-    // 2. Listen for install prompt
-    const handleBeforeInstallPrompt = (e: Event) => {
+    // 3. Listen for install prompt
+    const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
-      // Store event globally for components like InstallPWA to use
-      (window as any).deferredPrompt = e;
-      console.log("PWA: BeforeInstallPrompt event captured");
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+      console.log("PWA: BeforeInstallPrompt event captured at root");
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
-    // 3. Request Notifications
+    // 4. Request Notifications
     if ("Notification" in window && Notification.permission === "default") {
         setTimeout(() => {
             Notification.requestPermission();
@@ -52,5 +77,19 @@ export default function PWAProvider({ children }: { children: React.ReactNode })
     };
   }, []);
 
-  return <>{children}</>;
+  const promptInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+    }
+  };
+
+  return (
+    <PWAContext.Provider value={{ deferredPrompt, isInstallable, promptInstall, isIOS }}>
+      {children}
+    </PWAContext.Provider>
+  );
 }
