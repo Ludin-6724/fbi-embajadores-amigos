@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { X, Sparkles } from "lucide-react";
 
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.3.0";
 const STORAGE_KEY = "fbi_last_seen_version";
 
 const UPDATES = [
-  "Los posts ahora muestran los últimos comentarios directamente",
-  "Input de comentario siempre visible en cada post",
-  "Tiempo relativo en publicaciones (hace 2h, hace 3d…)",
-  "La plataforma carga más rápido con menos consumo de datos",
+  "Nuevo sistema de Compartir nativo (WhatsApp, Instagram Stories…)",
+  "Deep Linking: Cada publicación tiene ahora su propio enlace real",
+  "Pestañas persistentes: Navegación instantánea entre Muro y Rachas",
+  "Pantalla de 'Acceso Reservado' con invitación para nuevos agentes",
+  "Mejor manejo de errores y botón de reintento de carga",
 ];
 
 export default function UpdateBanner() {

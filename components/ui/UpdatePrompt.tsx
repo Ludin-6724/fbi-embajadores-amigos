@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { RefreshCw, X, Download, Share } from "lucide-react";
 
-const APP_VERSION = "2.1.2"; // Local version
+const APP_VERSION = "2.3.0"; // Local version after update
 
 export default function UpdatePrompt() {
   const [show, setShow] = useState(false);
@@ -41,6 +41,14 @@ export default function UpdatePrompt() {
 
   const handleUpdate = () => {
     if (typeof window !== "undefined") {
+      // Intenta forzar la actualización del service worker si existe
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for (let registration of registrations) {
+            registration.update();
+          }
+        });
+      }
       window.location.reload();
     }
   };
