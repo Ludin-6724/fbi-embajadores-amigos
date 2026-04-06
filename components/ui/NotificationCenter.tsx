@@ -4,10 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { Bell, Check, ExternalLink, Trash2, Loader2, MessageSquare, Heart, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import confetti from "canvas-confetti";
+import { Flame } from "lucide-react";
 
 type Notification = {
   id: string;
-  type: 'reaction' | 'comment' | 'community_approved';
+  type: 'reaction' | 'comment' | 'community_approved' | 'cheer';
   message: string;
   link: string | null;
   is_read: boolean;
@@ -62,6 +64,16 @@ export default function NotificationCenter() {
               const newNotif = payload.new as Notification;
               setNotifications(prev => [newNotif, ...prev]);
               setUnreadCount(prev => prev + 1);
+
+              // 🎊 ¡Si es un Ánimo (cheer), soltar confeti para el receptor!
+              if (newNotif.type === 'cheer') {
+                confetti({
+                  particleCount: 150,
+                  spread: 80,
+                  origin: { y: 0.6 },
+                  colors: ['#D4A017', '#FF4500', '#FFA500', '#101726']
+                });
+              }
 
               // Notificación del sistema (sonido + banner del OS)
               if (typeof window !== 'undefined' && window.Notification?.permission === 'granted') {
@@ -180,6 +192,7 @@ export default function NotificationCenter() {
       case 'reaction': return <Heart size={14} className="text-pink-500" />;
       case 'comment': return <MessageSquare size={14} className="text-gold" />;
       case 'community_approved': return <ShieldCheck size={14} className="text-green-500" />;
+      case 'cheer': return <Flame size={14} className="text-orange-500 fill-orange-500/20" />;
       default: return <Bell size={14} className="text-navy-dark/40" />;
     }
   };
