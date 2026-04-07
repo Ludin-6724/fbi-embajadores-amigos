@@ -45,6 +45,8 @@ export default function Comunidad({
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editPostContent, setEditPostContent] = useState("");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [inlinePostContent, setInlinePostContent] = useState("");
   const [isSubmittingInline, setIsSubmittingInline] = useState(false);
@@ -343,6 +345,32 @@ export default function Comunidad({
     }
   };
 
+  const handleEditPost = async (pId: string) => {
+    if (!editPostContent.trim()) return;
+    try {
+      const { error } = await sbRef.current.from("posts").update({ content: editPostContent.trim() }).eq("id", pId);
+      if (error) throw error;
+      setPosts(prev => prev.map(p => p.id === pId ? { ...p, content: editPostContent.trim() } : p));
+      setEditingPostId(null);
+      setOpenDropdownId(null);
+      showToast("Publicación actualizada");
+    } catch (err) {
+      showToast("Error al editar publicación", false);
+    }
+  };
+
+  const handleDeletePost = async (pId: string) => {
+    if (!window.confirm("¿Seguro que deseas eliminar esta publicación?")) return;
+    try {
+      const { error } = await sbRef.current.from("posts").delete().eq("id", pId);
+      if (error) throw error;
+      setPosts(prev => prev.filter(p => p.id !== pId));
+      showToast("Publicación eliminada");
+    } catch (err) {
+      showToast("Error al eliminar publicación", false);
+    }
+  };
+
   const handleShare = async (pId: string) => {
     const url = `${window.location.origin}/post/${pId}`;
     if (navigator.share) {
@@ -470,19 +498,78 @@ export default function Comunidad({
 
                   {/* Header */}
                   <div className="px-4 pt-4 pb-3">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {post.profiles?.avatar_url && !post.is_anonymous
-                          ? <img src={post.profiles.avatar_url} className="w-full h-full object-cover" alt={name} />
-                          : <span className="font-bold text-gold text-sm">{post.is_anonymous ? <Fingerprint size={18} /> : name[0]}</span>
-                        }
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {post.profiles?.avatar_url && !post.is_anonymous
+                            ? <img src={post.profiles.avatar_url} className="w-full h-full object-cover" alt={name} />
+                            : <span className="font-bold text-gold text-sm">{post.is_anonymous ? <Fingerprint size={18} /> : name[0]}</span>
+                          }
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-navy-dark leading-none">{name}</p>
+                          <p className="text-[10px] text-navy-dark/40 mt-0.5">{timeAgo(post.created_at)}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-sm text-navy-dark leading-none">{name}</p>
-                        <p className="text-[10px] text-navy-dark/40 mt-0.5">{timeAgo(post.created_at)}</p>
-                      </div>
+
+                      {userId === post.author_id && (
+                        <div className="relative">
+                          <button 
+                            onClick={() => setOpenDropdownId(openDropdownId === post.id ? null : post.id)} 
+                            className="text-navy-dark/30 hover:text-navy-dark/70 transition-colors p-1"
+                          >
+                            <MoreHorizontal size={18}/>
+                          </button>
+                          {openDropdownId === post.id && (
+                            <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gold/10 py-1 z-20 overflow-hidden animate-in fade-in zoom-in duration-200">
+                              <button 
+                                onClick={() => { 
+                                  setEditingPostId(post.id); 
+                                  setEditPostContent(post.content); 
+                                  setOpenDropdownId(null); 
+                                }} 
+                                className="w-full text-left px-4 py-2 text-xs font-bold text-navy-dark/70 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <Pen size={12}/> Editar
+                              </button>
+                              <button 
+                                onClick={() => handleDeletePost(post.id)} 
+                                className="w-full text-left px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <Trash2 size={12}/> Eliminar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                    {editingPostId === post.id ? (
+                      <div className="space-y-3">
+                        <textarea 
+                          autoFocus 
+                          value={editPostContent} 
+                          onChange={e => setEditPostContent(e.target.value)} 
+                          className="w-full bg-cream/30 border border-gold/20 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-gold outline-none resize-none font-sans" 
+                          rows={4}
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button 
+                            onClick={() => setEditingPostId(null)} 
+                            className="text-xs font-bold text-navy-dark/50 hover:text-navy-dark px-3 py-1.5 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button 
+                            onClick={() => handleEditPost(post.id)} 
+                            className="text-xs bg-navy-dark text-white px-4 py-1.5 rounded-full font-bold shadow-md hover:bg-gold hover:text-navy-dark transition-all"
+                          >
+                            Guardar cambios
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                    )}
                   </div>
 
                   {/* Reaction + comment count summary */}
