@@ -39,7 +39,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // EXCLUIR completamente: API, Supabase, y Next.js internals
+  // 1. EXCLUIR completamente: API, Supabase, y Next.js internals
   if (
     url.origin.includes('supabase.co') || 
     url.pathname.startsWith('/api/') || 
@@ -48,7 +48,14 @@ self.addEventListener('fetch', (event) => {
     return; // Network directo
   }
 
-  // Solo cachear imágenes y assets estáticos
+  // 2. IMPORTANTE: NO interceptar navegación (Initial Load / Refresh)
+  // Dejamos que el navegador maneje la carga inicial dinámicamente. Esto evita
+  // que la app se 'trabe' en el Service Worker si el servidor tarda en responder.
+  if (event.request.mode === 'navigate') {
+    return; // Dejar que pase a la red nativa
+  }
+
+  // 3. Solo cachear imágenes y assets estáticos (Cache First)
   if (
     url.pathname.endsWith('.jpg') || 
     url.pathname.endsWith('.png') || 
@@ -64,13 +71,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Para TODO lo demás (páginas HTML, JS, CSS): NETWORK FIRST con Timeout
-  // Esto garantiza que siempre se ve la versión más reciente, pero previene que la app se 'quede intentando cargar' infinitamente.
+  // 4. Para scripts, estilos y otros assets: NETWORK FIRST con TIMEOUT
+  // Solo interceptamos si NO es una navegación (ya filtrada arriba)
   event.respondWith(
     new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         reject(new Error("Network timeout"));
-      }, 10000); // 10 segundos de timeout
+      }, 8000); // 8 segundos para assets secundarios
       
       fetch(event.request)
         .then((networkResponse) => {
@@ -82,8 +89,9 @@ self.addEventListener('fetch', (event) => {
           reject(err);
         });
     }).catch(() => {
-      // Si la red falla o hace timeout, intentar cache como fallback
-      return caches.match(event.request);
+      // Fallback al cache SOLO SI EXISTE, si no, devolver undefined
+      // para que el navegador falle con un error estándar en lugar de colgarse.
+      return caches.match(event.request).then(cached => cached || undefined);
     })
   );
 });
