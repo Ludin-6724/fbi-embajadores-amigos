@@ -10,6 +10,9 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Settings, Lock, Globe } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function CommunityPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
   const supabase = await createClient();
   const resolvedParams = await params;

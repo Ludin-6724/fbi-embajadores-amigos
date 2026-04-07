@@ -64,17 +64,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Para TODO lo demás (páginas HTML, JS, CSS): NETWORK FIRST
-  // Esto garantiza que siempre se ve la versión más reciente
+  // Para TODO lo demás (páginas HTML, JS, CSS): NETWORK FIRST con Timeout
+  // Esto garantiza que siempre se ve la versión más reciente, pero previene que la app se 'quede intentando cargar' infinitamente.
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        return networkResponse;
-      })
-      .catch(() => {
-        // Solo si no hay red, intentar cache como fallback
-        return caches.match(event.request);
-      })
+    new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Network timeout"));
+      }, 10000); // 10 segundos de timeout
+      
+      fetch(event.request)
+        .then((networkResponse) => {
+          clearTimeout(timeoutId);
+          resolve(networkResponse);
+        })
+        .catch((err) => {
+          clearTimeout(timeoutId);
+          reject(err);
+        });
+    }).catch(() => {
+      // Si la red falla o hace timeout, intentar cache como fallback
+      return caches.match(event.request);
+    })
   );
 });
 

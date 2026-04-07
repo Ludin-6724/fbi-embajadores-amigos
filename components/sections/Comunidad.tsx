@@ -81,7 +81,8 @@ export default function Comunidad({
         .from("posts")
         .select(POST_SELECT)
         .order("created_at", { ascending: false })
-        .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1);
+        .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1)
+        .abortSignal(controller.signal);
 
       if (postId) {
         q = q.eq("id", postId);
@@ -140,7 +141,7 @@ export default function Comunidad({
             Object.keys(previews).forEach(k => previews[k].reverse());
             setCommentPreviews(prev => ({ ...prev, ...previews }));
             setCommentCounts(prev => ({ ...prev, ...counts }));
-          });
+          }).catch((err: any) => console.warn("Error fetching comments:", err));
       }
     } catch (err: any) {
       clearTimeout(timeoutId);
