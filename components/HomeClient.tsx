@@ -9,11 +9,13 @@ import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
 import BottomNavbar, { TabType } from "@/components/ui/BottomNavbar";
 import ProfileSection from "@/components/sections/ProfileSection";
-import SubCommunities from "@/components/sections/SubCommunities";
 import UpdatePrompt from "@/components/ui/UpdatePrompt";
 import { createClient } from "@/lib/supabase/client";
 
-export default function HomeClient({ initialUser, initialProfile }: { initialUser: any, initialProfile: any }) {
+/** Referencia estable: evita que `[]` nuevo en cada render dispare efectos en hijos. */
+const EMPTY_POSTS: any[] = [];
+
+export default function HomeClient({ initialUser, initialProfile, initialPosts = EMPTY_POSTS }: { initialUser: any, initialProfile: any, initialPosts?: any[] }) {
   const [activeTab, setActiveTab] = useState<TabType>("feed");
   const [visitedTabs, setVisitedTabs] = useState<Set<TabType>>(new Set(["feed"]));
 
@@ -42,10 +44,22 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
 
   useEffect(() => {
     const handleEvents = (e: any) => {
-        if (e.type === "fbi:change-tab" && e.detail) handleTabChange(e.detail as TabType);
+        if (e.type === "fbi:change-tab" && e.detail) {
+          handleTabChange(e.detail as TabType);
+        } else if (e.type === "fbi:prefetch-tab" && e.detail) {
+          const tab = e.detail as TabType;
+          setVisitedTabs(prev => {
+            if (prev.has(tab)) return prev;
+            return new Set([...prev, tab]);
+          });
+        }
     };
     window.addEventListener("fbi:change-tab", handleEvents);
-    return () => window.removeEventListener("fbi:change-tab", handleEvents);
+    window.addEventListener("fbi:prefetch-tab", handleEvents);
+    return () => {
+      window.removeEventListener("fbi:change-tab", handleEvents);
+      window.removeEventListener("fbi:prefetch-tab", handleEvents);
+    };
   }, []);
 
   const renderContent = () => {
@@ -84,15 +98,15 @@ export default function HomeClient({ initialUser, initialProfile }: { initialUse
       <div className="flex-1 flex flex-col pt-16">
         <div style={{ display: activeTab === "feed" ? "block" : "none" }}>
           <Hero profile={initialProfile} />
-          <Comunidad initialTab="muro" hideTabs={true} initialProfile={initialProfile} isAllowedToFetch={visitedTabs.has("feed")} />
+          <Comunidad initialTab="muro" hideTabs={true} initialProfile={initialProfile} isAllowedToFetch={visitedTabs.has("feed") && activeTab === "feed"} initialPosts={activeTab === "feed" ? initialPosts : EMPTY_POSTS} />
         </div>
 
         <div style={{ display: activeTab === "prayers" ? "block" : "none" }}>
-          <Comunidad initialTab="oratorio" hideTabs={true} initialProfile={initialProfile} isAllowedToFetch={visitedTabs.has("prayers")} />
+          <Comunidad initialTab="oratorio" hideTabs={true} initialProfile={initialProfile} isAllowedToFetch={visitedTabs.has("prayers") && activeTab === "prayers"} />
         </div>
 
         <div style={{ display: activeTab === "streaks" ? "block" : "none" }}>
-          <Rachas profile={initialProfile} isAllowedToFetch={visitedTabs.has("streaks")} />
+          <Rachas profile={initialProfile} isAllowedToFetch={visitedTabs.has("streaks") && activeTab === "streaks"} />
         </div>
 
         <div style={{ display: activeTab === "profile" ? "block" : "none" }}>

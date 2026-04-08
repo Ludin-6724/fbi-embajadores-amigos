@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
 import Link from "next/link";
+import { cache } from "@/lib/utils/cache";
 
 /* ─── Types ─── */
 type ReactionRow = { id: string; user_id: string; reaction: ReactionType };
@@ -23,12 +24,15 @@ type Post = {
 /* Minimal select — NO nested comment joins */
 const POST_SELECT = "id, author_id, content, is_anonymous, community_id, created_at, profiles(username, full_name, avatar_url), post_reactions(id, user_id, reaction)";
 
+const EMPTY_INITIAL_POSTS: Post[] = [];
+
 export default function Comunidad({
   communityId, initialTab = "muro", hideTabs = false,
-  postId, initialProfile, isAllowedToFetch = true
+  postId, initialProfile, isAllowedToFetch = true, initialPosts = EMPTY_INITIAL_POSTS
 }: {
   communityId?: string; initialTab?: "muro" | "oratorio"; hideTabs?: boolean;
   postId?: string; initialProfile?: any; isAllowedToFetch?: boolean;
+  initialPosts?: Post[];
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +59,13 @@ export default function Comunidad({
   // Stable ref to supabase — never changes, never triggers re-renders
   const sbRef = useRef(createClient());
   const hasFetched = useRef(false);
+  const fetchCtxRef = useRef("");
+  const bootstrapDoneRef = useRef("");
+
+  const initialPostsSignature = useMemo(
+    () => (initialPosts.length ? initialPosts.map((p) => p.id).join("|") : ""),
+    [initialPosts]
+  );
 
   const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -69,9 +80,49 @@ export default function Comunidad({
     });
   }, [initialProfile]);
 
+  // Helper to fetch comments for a list of post IDs
+  const fetchCommentsForPosts = useCallback(async (postIds: string[]) => {
+    if (postIds.length === 0) return;
+    const supabase = sbRef.current;
+    
+    try {
+      let q = supabase
+        .from("comments")
+        .select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url), comment_reactions(id, user_id, reaction)")
+        .in("post_id", postIds)
+        .order("created_at", { ascending: false });
+        
+      if (!postId) {
+        q = q.limit(postIds.length * 3);
+      }
+
+      const { data: cData } = await q;
+      if (!cData) return;
+      
+      const previews: Record<string, CommentPreview[]> = {};
+      const counts: Record<string, number> = {};
+      
+      for (const c of cData) {
+        counts[c.post_id] = (counts[c.post_id] ?? 0) + 1;
+        if (!previews[c.post_id]) previews[c.post_id] = [];
+        if (!postId) {
+          if (previews[c.post_id].length < 2) previews[c.post_id].push(c);
+        } else {
+          previews[c.post_id].push(c);
+        }
+      }
+      
+      Object.keys(previews).forEach(k => previews[k].reverse());
+      setCommentPreviews(prev => ({ ...prev, ...previews }));
+      setCommentCounts(prev => ({ ...prev, ...counts }));
+    } catch (err) {
+      console.warn("Error fetching comments:", err);
+    }
+  }, [postId]);
+
   // Main fetch function — uses ref, no deps on supabase
-  const fetchPosts = useCallback(async (pageNum: number, append: boolean) => {
-    if (!append) setLoading(true);
+  const fetchPosts = useCallback(async (pageNum: number, append: boolean, opts?: { silent?: boolean }) => {
+    if (!append && !opts?.silent) setLoading(true);
     setError(null);
 
     const supabase = sbRef.current;
@@ -110,40 +161,22 @@ export default function Comunidad({
       }));
 
       if (fetched.length < pageSize) setHasMore(false);
-      if (append) setPosts(prev => [...prev, ...fetched]);
-      else setPosts(fetched);
+      
+      if (append) setPosts(prev => {
+        const next = [...prev, ...fetched];
+        if (!postId && pageNum === 0) cache.set(`posts_${activeTab}_${communityId || 'global'}`, next.slice(0, 50));
+        return next;
+      });
+      else setPosts(prev => {
+        if (!postId) cache.set(`posts_${activeTab}_${communityId || 'global'}`, fetched.slice(0, 50));
+        return fetched;
+      });
+      
       setLoading(false);
 
-        // Load comments (all if postId is set, otherwise 2 previews per post)
+      // Fetch comments for the newly fetched posts
       if (fetched.length > 0) {
-        const ids = fetched.map(p => p.id);
-        let q = supabase
-          .from("comments")
-          .select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url), comment_reactions(id, user_id, reaction)")
-          .in("post_id", ids)
-          .order("created_at", { ascending: false });
-          
-        if (!postId) {
-          q = q.limit(ids.length * 3);
-        }
-
-        q.then(({ data: cData }: { data: any }) => {
-            if (!cData) return;
-            const previews: Record<string, CommentPreview[]> = {};
-            const counts: Record<string, number> = {};
-            for (const c of cData) {
-              counts[c.post_id] = (counts[c.post_id] ?? 0) + 1;
-              if (!previews[c.post_id]) previews[c.post_id] = [];
-              if (!postId) {
-                if (previews[c.post_id].length < 2) previews[c.post_id].push(c);
-              } else {
-                previews[c.post_id].push(c);
-              }
-            }
-            Object.keys(previews).forEach(k => previews[k].reverse());
-            setCommentPreviews(prev => ({ ...prev, ...previews }));
-            setCommentCounts(prev => ({ ...prev, ...counts }));
-          }).catch((err: any) => console.warn("Error fetching comments:", err));
+        fetchCommentsForPosts(fetched.map(p => p.id));
       }
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -154,16 +187,123 @@ export default function Comunidad({
       }
       setLoading(false);
     }
-  }, [activeTab, communityId, postId, pageSize]);
+  }, [activeTab, communityId, postId, pageSize, fetchCommentsForPosts]);
 
-  // Initial fetch — runs ONCE when allowed, then only on real dependency changes
+  // Realtime Subscriptions — Keep the feed alive
+  useEffect(() => {
+    if (!isAllowedToFetch || postId) return;
+
+    const supabase = sbRef.current;
+    const channel = supabase
+      .channel(`public:posts:${activeTab}:${communityId || 'global'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'posts',
+          filter: communityId ? `community_id=eq.${communityId}` : 'community_id=is.null'
+        },
+        async (payload: { new: any }) => {
+          const newPost = payload.new as any;
+          // Only add if it matches the current tab's anonymity
+          const matchesTab = activeTab === 'oratorio' ? newPost.is_anonymous : !newPost.is_anonymous;
+          
+          if (matchesTab) {
+            // Fetch the profile for the new post to show name/avatar
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('username, full_name, avatar_url')
+              .eq('id', newPost.author_id)
+              .single();
+            
+            const postWithProfile: Post = {
+              ...newPost,
+              profiles: profile,
+              post_reactions: []
+            };
+
+            setPosts(prev => {
+              if (prev.find(p => p.id === postWithProfile.id)) return prev;
+              const next = [postWithProfile, ...prev];
+              // Update cache with the new post
+              if (!postId) cache.set(`posts_${activeTab}_${communityId || 'global'}`, next.slice(0, 50));
+              return next;
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'post_reactions'
+        },
+        () => {
+          // If reactions change, we could do more granular updates, 
+          // but for now, simple refresh or let the manual actions handle it.
+          // Or we can just let the optimistic UI do its job.
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAllowedToFetch, activeTab, communityId, postId]);
+
+  // Initial fetch — solo cuando la pestaña está activa; firma estable evita bucles por `[]` nuevo
   useEffect(() => {
     if (!isAllowedToFetch) return;
+
+    const ctx = `${activeTab}|${communityId ?? ""}|${postId ?? ""}|${initialPostsSignature}`;
+    if (bootstrapDoneRef.current === ctx) return;
+
+    if (fetchCtxRef.current !== ctx) {
+      fetchCtxRef.current = ctx;
+      hasFetched.current = false;
+    }
+
+    let usedCache = false;
+
+    // 1. Primacía de initialPosts (servidor)
+    if (initialPosts.length > 0 && !postId && !hasFetched.current) {
+      setPosts(initialPosts);
+      setLoading(false);
+      hasFetched.current = true;
+      bootstrapDoneRef.current = ctx;
+      cache.set(`posts_${activeTab}_${communityId || "global"}`, initialPosts);
+      fetchCommentsForPosts(initialPosts.map((p) => p.id));
+      void fetchPosts(0, false, { silent: true });
+      return;
+    }
+
+    // 2. Caché local (incluye datos stale vía peekStale)
+    if (!hasFetched.current && !postId) {
+      const { data: cachedPosts } = cache.peekStale<Post[]>(`posts_${activeTab}_${communityId || "global"}`);
+      if (cachedPosts && cachedPosts.length > 0) {
+        setPosts(cachedPosts);
+        setLoading(false);
+        usedCache = true;
+      }
+    }
+
+    // 3. Red (silencioso si ya pintamos caché)
     hasFetched.current = true;
+    bootstrapDoneRef.current = ctx;
     setPage(0);
     setHasMore(true);
-    fetchPosts(0, false);
-  }, [isAllowedToFetch, activeTab, communityId, postId]);
+    void fetchPosts(0, false, { silent: usedCache });
+  }, [
+    isAllowedToFetch,
+    activeTab,
+    communityId,
+    postId,
+    initialPostsSignature,
+    fetchCommentsForPosts,
+    fetchPosts,
+  ]);
 
   // Pagination — only triggers on user action
   const loadMore = () => {

@@ -27,11 +27,19 @@ export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarPro
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
 
+            const handlePrefetch = () => {
+              if (!isActive) {
+                window.dispatchEvent(new CustomEvent("fbi:prefetch-tab", { detail: tab.id }));
+              }
+            };
+
             if (tab.isCenter) {
               return (
                 <button
                   key={tab.id}
                   onClick={() => onTabChange(tab.id)}
+                  onMouseEnter={handlePrefetch}
+                  onTouchStart={handlePrefetch}
                   className="relative -top-4 flex flex-col items-center justify-center min-w-[64px] group"
                   aria-label={tab.label}
                 >
@@ -47,6 +55,8 @@ export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarPro
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
+                onMouseEnter={handlePrefetch}
+                onTouchStart={handlePrefetch}
                 aria-label={tab.label}
                 className={cn(
                   "flex flex-col items-center justify-center flex-1 py-1 transition-all min-w-[50px] group",

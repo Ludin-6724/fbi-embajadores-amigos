@@ -25,63 +25,82 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
+  function navigateToLink(link: string | null) {
+    if (!link) return;
+    if (link.startsWith("#")) {
+      const id = link.substring(1);
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        window.location.href = "/" + link;
+      }
+    } else {
+      window.location.href = link;
+    }
+  }
+
   useEffect(() => {
     let mounted = true;
-    let channel: any;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let swHandler: ((event: MessageEvent) => void) | null = null;
 
-    const setupSubscription = async () => {
-      // Use userId prop if present, else fallback to auth.getUser()
-      const currentUserId = userId || (await supabase.auth.getUser()).data?.user?.id;
-      
-      if (!currentUserId || !mounted) {
-        setLoading(false);
-        setNotifications([]);
-        setUnreadCount(0);
-        return;
-      }
+    const run = async () => {
+      try {
+        const currentUserId = userId || (await supabase.auth.getUser()).data?.user?.id;
 
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false })
-        .limit(20);
+        if (!currentUserId || !mounted) {
+          setNotifications([]);
+          setUnreadCount(0);
+          return;
+        }
 
-      if (mounted && data) {
-        setNotifications(data as Notification[]);
-        setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
-        setLoading(false);
-      }
+        const { data, error } = await supabase
+          .from("notifications")
+          .select("*")
+          .eq("user_id", currentUserId)
+          .order("created_at", { ascending: false })
+          .limit(20);
 
-      // Subscribe to real-time notifications
-      if (mounted) {
+        if (!mounted) return;
+
+        if (error) {
+          console.warn("notifications fetch:", error.message);
+          setNotifications([]);
+          setUnreadCount(0);
+        } else {
+          const list = (data ?? []) as Notification[];
+          setNotifications(list);
+          setUnreadCount(list.filter((n) => !n.is_read).length);
+        }
+
+        if (!mounted) return;
+
         channel = supabase
           .channel(`notifs_${currentUserId.substring(0, 8)}_${Math.random().toString(36).substring(7)}`)
           .on(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` },
-            (payload: { new: Record<string, any> }) => {
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${currentUserId}` },
+            (payload: { new: Record<string, unknown> }) => {
               if (!mounted) return;
               const newNotif = payload.new as Notification;
-              setNotifications(prev => [newNotif, ...prev]);
-              setUnreadCount(prev => prev + 1);
+              setNotifications((prev) => [newNotif, ...prev]);
+              setUnreadCount((prev) => prev + 1);
 
-              // 🎊 ¡Si es un Ánimo (cheer), soltar confeti para el receptor!
-              if (newNotif.type === 'cheer') {
+              if (newNotif.type === "cheer") {
                 confetti({
                   particleCount: 150,
                   spread: 80,
                   origin: { y: 0.6 },
-                  colors: ['#D4A017', '#FF4500', '#FFA500', '#101726']
+                  colors: ["#D4A017", "#FF4500", "#FFA500", "#101726"],
                 });
               }
 
-              // Notificación del sistema (sonido + banner del OS)
-              if (typeof window !== 'undefined' && window.Notification?.permission === 'granted') {
-                const sysNotif = new window.Notification('FBI Amigos', {
+              if (typeof window !== "undefined" && window.Notification?.permission === "granted") {
+                const sysNotif = new window.Notification("FBI Amigos", {
                   body: newNotif.message,
-                  icon: '/logo-fbi.jpg',
-                  badge: '/logo-fbi.jpg',
+                  icon: "/logo-fbi.jpg",
+                  badge: "/logo-fbi.jpg",
                   tag: newNotif.id,
                 });
                 sysNotif.onclick = () => {
@@ -94,26 +113,29 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
           )
           .subscribe();
 
-        // Escuchar mensajes del Service Worker (click en notif con app en background)
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.addEventListener('message', (event) => {
-            if (event.data?.type === 'NAVIGATE_TO' && mounted) {
-              navigateToLink(event.data.link);
+        if ("serviceWorker" in navigator) {
+          swHandler = (event: MessageEvent) => {
+            if (event.data?.type === "NAVIGATE_TO" && mounted) {
+              navigateToLink(event.data.link as string | null);
             }
-          });
+          };
+          navigator.serviceWorker.addEventListener("message", swHandler);
         }
+      } finally {
+        if (mounted) setLoading(false);
       }
     };
 
-    setupSubscription();
+    void run();
 
     return () => {
       mounted = false;
-      if (channel) {
-        supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
+      if (swHandler && "serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener("message", swHandler);
       }
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -168,23 +190,6 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
     if (!error) {
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
-    }
-  };
-
-  const navigateToLink = (link: string | null) => {
-    if (!link) return;
-    if (link.startsWith('#')) {
-      const id = link.substring(1);
-      // Si el elemento ya está en el DOM, hacer scroll directo
-      const el = document.getElementById(id);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        // Navegar a la home con el hash para que cargue el post
-        window.location.href = '/' + link;
-      }
-    } else {
-      window.location.href = link;
     }
   };
 

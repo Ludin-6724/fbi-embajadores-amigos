@@ -40,10 +40,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // 1. EXCLUIR completamente: API, Supabase, y Next.js internals
+  // También excluimos peticiones RSC (Next-Router-State-Tree, RSC header, etc.)
   if (
     url.origin.includes('supabase.co') || 
     url.pathname.startsWith('/api/') || 
-    url.pathname.includes('_next/')
+    url.pathname.includes('_next/') ||
+    url.searchParams.has('_rsc') ||
+    event.request.headers.get('RSC') === '1'
   ) {
     return; // Network directo
   }

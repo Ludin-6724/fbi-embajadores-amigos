@@ -41,23 +41,35 @@ export default function Navbar({
     window.addEventListener("scroll", handleScroll);
 
     const checkUser = async () => {
+      // Only fetch session if we don't have it to avoid redundant re-renders
       const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
-        setProfile(data);
+      const currentUser = session?.user ?? null;
+      
+      if (currentUser) {
+        setUser(currentUser);
+        const { data } = await supabase.from("profiles").select("*").eq("id", currentUser.id).single();
+        if (data) setProfile(data);
       }
     };
-    checkUser();
+
+    // If initialUser is provided, we don't need to check session immediately
+    if (!initialUser) {
+      checkUser();
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event: any, session: any) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
-          setProfile(data);
-        } else {
-          setProfile(null);
+      async (event: any, session: any) => {
+        const newUser = session?.user ?? null;
+        
+        // Only update if user actually changed
+        if (newUser?.id !== user?.id) {
+            setUser(newUser);
+            if (newUser) {
+              const { data } = await supabase.from("profiles").select("*").eq("id", newUser.id).single();
+              setProfile(data);
+            } else {
+              setProfile(null);
+            }
         }
       }
     );
@@ -66,7 +78,7 @@ export default function Navbar({
       window.removeEventListener("scroll", handleScroll);
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, []); // Remove supabase dependency to prevent loops, it's a stable singleton
 
   // Close dropdown on outside click
   useEffect(() => {

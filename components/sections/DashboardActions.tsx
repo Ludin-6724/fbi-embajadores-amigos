@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PenSquare, UserMinus, Flame, Users, X, Loader2, Globe, Lock, Target, CheckCircle, PenTool, Rocket, MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -22,6 +23,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
   const [loadingStreak, setLoadingStreak] = useState(false);
 
   const supabase = createClient();
+  const router = useRouter();
 
   const handleClose = () => {
     setActiveModal(null);
@@ -83,7 +85,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     if (!error) {
       handleClose();
       window.dispatchEvent(new CustomEvent("fbi:refresh-feed")); 
-      window.location.reload(); 
+      router.refresh(); 
     } else {
       console.error(error);
       setFormError(`Error al publicar: ${error.message}`);
@@ -131,7 +133,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
         is_anonymous: false
       });
       handleClose();
-      window.location.reload();
+      router.refresh();
     } else {
       setFormError(`Error al guardar racha: ${streakError.message}`);
       setSubmitting(false);
@@ -172,7 +174,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
         role: 'founder'
       });
       handleClose();
-      window.location.reload();
+      router.refresh();
     } else {
       setFormError(`Error: ${error?.message ?? "desconocido. Verifica permisos en Supabase."}`);
       setSubmitting(false);

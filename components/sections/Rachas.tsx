@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Flame, Trophy, CheckCircle, Loader2, Target, PenTool } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import confetti from "canvas-confetti";
+import { cache } from "@/lib/utils/cache";
 
 type Streak = {
   streak_days: number;
@@ -44,6 +45,19 @@ export default function Rachas({
 
   useEffect(() => {
     if (isAllowedToFetch) {
+      // 1. Try to load from Cache first
+      const { data: cachedStreaks } = cache.peekStale<Streak[]>(`streaks_${communityId || 'global'}`);
+      const { data: cachedMyStreak } = cache.peekStale<Streak>(`my_streak_${communityId || 'global'}`);
+      
+      if (cachedStreaks?.length) {
+        setTopStreaks(cachedStreaks);
+        setLoading(false);
+      }
+      if (cachedMyStreak) {
+        setMyStreak(cachedMyStreak);
+      }
+
+      // 2. Fetch fresh data
       fetchData();
     }
   }, [communityId, isAllowedToFetch]);
@@ -80,18 +94,28 @@ export default function Rachas({
         console.warn("Retrying streak fetch:", streaksError.message);
         const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, user_id, profiles(username)").limit(20);
         if (fbErr) throw fbErr;
-        setTopStreaks(((fallback as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10));
+        const filtered = ((fallback as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10);
+        setTopStreaks(filtered);
+        cache.set(`streaks_${communityId || 'global'}`, filtered);
       } else {
-        setTopStreaks(((data as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10));
+        const filtered = ((data as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10);
+        setTopStreaks(filtered);
+        cache.set(`streaks_${communityId || 'global'}`, filtered);
       }
 
       // Check self streak using existing userId
       if (userId) {
         const mine = (data as any)?.find((s: any) => s.user_id === userId);
-        if (mine) setMyStreak(mine);
+        if (mine) {
+          setMyStreak(mine);
+          cache.set(`my_streak_${communityId || 'global'}`, mine);
+        }
         else {
           supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle().then(({ data: myD }: { data: any; error: any }) => {
-            if (myD) setMyStreak(myD as any);
+            if (myD) {
+              setMyStreak(myD as any);
+              cache.set(`my_streak_${communityId || 'global'}`, myD as any);
+            }
           });
         }
       }

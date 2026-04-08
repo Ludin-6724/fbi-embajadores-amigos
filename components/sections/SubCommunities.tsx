@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Users, Shield, PlusCircle, ArrowRight, Globe, Lock,
   MoreVertical, Settings, Trash2, Loader2, Clock
 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 
 type Community = {
@@ -28,12 +29,66 @@ type PendingRequest = { community_id: string };
 
 const supabase = createClient();
 
+const COMMUNITIES_QK = ["communities", "list"] as const;
+
+async function fetchCommunitiesBundle(): Promise<{
+  currentUserId: string | null;
+  communities: Community[];
+  myMemberships: MembershipEntry[];
+  myPending: PendingRequest[];
+}> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const uid = user?.id ?? null;
+
+  const communitiesSelect = () =>
+    supabase
+      .from("communities")
+      .select("id, name, description, owner_id, is_official, is_private, invite_code")
+      .order("is_official", { ascending: false })
+      .order("created_at", { ascending: false });
+
+  if (uid) {
+    const [commsResult, membershipsResult, pendingResult] = await Promise.all([
+      communitiesSelect(),
+      supabase.from("community_members").select("community_id, role").eq("user_id", uid),
+      supabase
+        .from("community_join_requests")
+        .select("community_id")
+        .eq("user_id", uid)
+        .eq("status", "pending"),
+    ]);
+    return {
+      currentUserId: uid,
+      communities: (commsResult.data as Community[]) ?? [],
+      myMemberships: (membershipsResult.data as MembershipEntry[]) ?? [],
+      myPending: (pendingResult.data as PendingRequest[]) ?? [],
+    };
+  }
+
+  const { data: comms } = await communitiesSelect();
+  return {
+    currentUserId: null,
+    communities: (comms as Community[]) ?? [],
+    myMemberships: [],
+    myPending: [],
+  };
+}
+
 export default function SubCommunities() {
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [myMemberships, setMyMemberships] = useState<MembershipEntry[]>([]);
-  const [myPending, setMyPending] = useState<PendingRequest[]>([]);
+  const queryClient = useQueryClient();
+  const { data, isPending: loading } = useQuery({
+    queryKey: COMMUNITIES_QK,
+    queryFn: fetchCommunitiesBundle,
+    staleTime: 120_000,
+  });
+
+  const communities = data?.communities ?? [];
+  const currentUserId = data?.currentUserId ?? null;
+  const myMemberships = data?.myMemberships ?? [];
+  const myPending = data?.myPending ?? [];
+
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -43,37 +98,6 @@ export default function SubCommunities() {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
-
-  const fetchAll = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setCurrentUserId(user?.id ?? null);
-
-    const communitiesQuery = supabase
-      .from("communities")
-      .select("id, name, description, owner_id, is_official, is_private, invite_code")
-      .order("is_official", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    if (user?.id) {
-      const [commsResult, membershipsResult, pendingResult] = await Promise.all([
-        communitiesQuery,
-        supabase.from("community_members").select("community_id, role").eq("user_id", user.id),
-        supabase.from("community_join_requests").select("community_id").eq("user_id", user.id).eq("status", "pending"),
-      ]);
-      setCommunities((commsResult.data as Community[]) ?? []);
-      setMyMemberships((membershipsResult.data as MembershipEntry[]) ?? []);
-      setMyPending((pendingResult.data as PendingRequest[]) ?? []);
-    } else {
-      const { data: comms } = await communitiesQuery;
-      setCommunities((comms as Community[]) ?? []);
-    }
-
-    setLoading(false);
-  }, [supabase]);
-
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
 
   // Close menu on outside click
   useEffect(() => {
@@ -98,7 +122,7 @@ export default function SubCommunities() {
     });
     if (!error) {
       showToast("¡Te uniste exitosamente! 🎉");
-      setMyMemberships(prev => [...prev, { community_id: commId, role: "member" }]);
+      void queryClient.invalidateQueries({ queryKey: COMMUNITIES_QK });
     }
     setJoiningId(null);
   };
@@ -114,7 +138,7 @@ export default function SubCommunities() {
     const json = await res.json();
     if (res.ok) {
       showToast("✉️ Solicitud enviada. El admin la revisará.");
-      setMyPending(prev => [...prev, { community_id: commId }]);
+      void queryClient.invalidateQueries({ queryKey: COMMUNITIES_QK });
     } else {
       showToast(`❌ ${json.error}`);
     }
@@ -126,7 +150,7 @@ export default function SubCommunities() {
     const res = await fetch(`/api/communities/${commId}`, { method: "DELETE" });
     if (res.ok) {
       showToast("Grupo disuelto.");
-      setCommunities(prev => prev.filter(c => c.id !== commId));
+      void queryClient.invalidateQueries({ queryKey: COMMUNITIES_QK });
     } else {
       const json = await res.json();
       showToast(`❌ ${json.error}`);
