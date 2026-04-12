@@ -69,31 +69,40 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
       const permission = await window.Notification.requestPermission();
       if (permission !== 'granted') {
         setPushStatus("denied");
+        alert('Necesitas permitir las notificaciones para recibir alertas fuera de la app.');
         return;
       }
 
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) throw new Error("No vapid key provided");
+      if (!vapidKey) throw new Error("Falta la llave VAPID pública. Avisa al administrador.");
 
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey)
       });
 
-      // Enviar al backend
+      // Obtener el userId actual para enviarlo junto con la suscripción
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Convertir la suscripción a JSON y agregar el userId
+      const subJson = subscription.toJSON();
+      const payload = { ...subJson, userId: user?.id };
+
       const res = await fetch('/api/web-push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subscription)
+        body: JSON.stringify(payload)
       });
 
-      if (!res.ok) throw new Error("Error en suscripción");
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Error desconocido al guardar suscripción");
 
       setPushStatus("granted");
+      alert('✅ ¡Notificaciones activadas! Ya recibirás alertas en tu dispositivo.');
     } catch (e: any) {
       console.error(e);
       setPushStatus("default");
-      alert("Hubo un error configurando las notificaciones nativas: " + e.message);
+      alert("Error activando notificaciones: " + e.message);
     }
   };
 
