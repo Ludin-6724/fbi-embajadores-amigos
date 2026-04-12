@@ -5,6 +5,7 @@ import PWAProvider from "@/components/providers/PWAProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import UpdateBanner from "@/components/providers/UpdateBanner";
 import GlobalInstallPrompt from "@/components/ui/GlobalInstallPrompt";
+import GlobalPushPrompt from "@/components/ui/GlobalPushPrompt";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -45,6 +46,7 @@ export default function RootLayout({
             {children}
             <UpdateBanner />
             <GlobalInstallPrompt />
+            <GlobalPushPrompt />
           </PWAProvider>
         </QueryProvider>
       </body>
