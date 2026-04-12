@@ -22,7 +22,7 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [pushStatus, setPushStatus] = useState<string>("default");
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(true); // true = ocultar botón por defecto
   const dropdownRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -63,12 +63,10 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
     }
 
     try {
-      setPushStatus("requesting");
       const registration = await navigator.serviceWorker.ready;
       
       const permission = await window.Notification.requestPermission();
       if (permission !== 'granted') {
-        setPushStatus("denied");
         alert('Necesitas permitir las notificaciones para recibir alertas fuera de la app.');
         return;
       }
@@ -97,20 +95,43 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Error desconocido al guardar suscripción");
 
-      setPushStatus("granted");
+      setIsSubscribed(true);
       alert('✅ ¡Notificaciones activadas! Ya recibirás alertas en tu dispositivo.');
     } catch (e: any) {
       console.error(e);
-      setPushStatus("default");
       alert("Error activando notificaciones: " + e.message);
     }
   };
 
+  // Verificar si este dispositivo ya tiene una suscripción activa en la BD
   useEffect(() => {
-    if (typeof window !== "undefined" && 'Notification' in window) {
-      setPushStatus(window.Notification.permission);
-    }
-  }, []);
+    const checkSubscription = async () => {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+          setIsSubscribed(true); // Ocultar botón si no es compatible
+          return;
+        }
+        const registration = await navigator.serviceWorker.ready;
+        const existingSub = await registration.pushManager.getSubscription();
+        if (!existingSub) {
+          setIsSubscribed(false); // No hay suscripción en el browser → mostrar botón
+          return;
+        }
+        // Verificar si está guardada en la BD
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setIsSubscribed(false); return; }
+        const { data } = await supabase
+          .from('push_subscriptions')
+          .select('id')
+          .eq('endpoint', existingSub.endpoint)
+          .single();
+        setIsSubscribed(!!data); // Si no está en BD, mostrar botón
+      } catch {
+        setIsSubscribed(false);
+      }
+    };
+    void checkSubscription();
+  }, [userId]);
 
   useEffect(() => {
     let mounted = true;
@@ -360,7 +381,7 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
           </div>
 
           <div className="px-5 py-3 border-t border-light-gray bg-cream/10 text-center flex flex-col items-center gap-2">
-             {pushStatus === "default" && (
+             {!isSubscribed && (
                 <button 
                   onClick={handleSubscribePush}
                   className="w-full bg-navy-dark text-white rounded-xl py-2 px-3 text-[11px] font-bold font-sans flex items-center justify-center gap-2 hover:bg-gold transition-colors"
