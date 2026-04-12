@@ -36,18 +36,26 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY! || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // Obtener los dispositivos del usuario destino
-    const { data: subscriptions, error } = await supabase
-      .from("push_subscriptions")
-      .select("*")
-      .eq("user_id", user_id);
+    // Obtener los dispositivos del usuario destino (o todos si es broadcast)
+    let subscriptions: any[] = [];
+    
+    if (!user_id && type === 'global_post') {
+      const { data, error } = await supabase.from("push_subscriptions").select("*");
+      if (data) subscriptions = data;
+    } else if (user_id) {
+      const { data, error } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("user_id", user_id);
+      if (data) subscriptions = data;
+    }
 
-    if (error || !subscriptions || subscriptions.length === 0) {
+    if (subscriptions.length === 0) {
       return NextResponse.json({ success: true, warning: 'No subscriptions found' });
     }
 
     const payload = JSON.stringify({
-      title: type === 'cheer' ? '¡Recibiste Ánimos! 🔥' : 'Nueva Notificación',
+      title: type === 'global_post' ? '¡Novedades en el FBI!' : (type === 'cheer' ? '¡Recibiste Ánimos! 🔥' : 'Nueva Notificación'),
       body: message,
       link: link
     });
