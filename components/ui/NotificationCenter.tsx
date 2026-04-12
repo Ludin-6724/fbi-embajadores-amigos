@@ -5,7 +5,7 @@ import { Bell, Check, ExternalLink, Trash2, Loader2, MessageSquare, Heart, Shiel
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
-import { Flame } from "lucide-react";
+import { Flame, Smartphone } from "lucide-react";
 
 type Notification = {
   id: string;
@@ -22,6 +22,7 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pushStatus, setPushStatus] = useState<string>("default");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -39,6 +40,68 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
       window.location.href = link;
     }
   }
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  const handleSubscribePush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('Tu navegador no soporta notificaciones de fondo.');
+      return;
+    }
+
+    try {
+      setPushStatus("requesting");
+      const registration = await navigator.serviceWorker.ready;
+      
+      const permission = await window.Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushStatus("denied");
+        return;
+      }
+
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) throw new Error("No vapid key provided");
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey)
+      });
+
+      // Enviar al backend
+      const res = await fetch('/api/web-push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subscription)
+      });
+
+      if (!res.ok) throw new Error("Error en suscripción");
+
+      setPushStatus("granted");
+    } catch (e: any) {
+      console.error(e);
+      setPushStatus("default");
+      alert("Hubo un error configurando las notificaciones nativas: " + e.message);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && 'Notification' in window) {
+      setPushStatus(window.Notification.permission);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -287,7 +350,15 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
             )}
           </div>
 
-          <div className="px-5 py-3 border-t border-light-gray bg-cream/10 text-center">
+          <div className="px-5 py-3 border-t border-light-gray bg-cream/10 text-center flex flex-col items-center gap-2">
+             {pushStatus === "default" && (
+                <button 
+                  onClick={handleSubscribePush}
+                  className="w-full bg-navy-dark text-white rounded-xl py-2 px-3 text-[11px] font-bold font-sans flex items-center justify-center gap-2 hover:bg-gold transition-colors"
+                >
+                  <Smartphone size={14} /> Activar Notificaciones Push
+                </button>
+             )}
              <span className="text-[11px] font-sans text-navy-dark/40">Agente @FBI</span>
           </div>
         </div>
