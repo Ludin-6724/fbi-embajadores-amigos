@@ -2,12 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 
-webpush.setVapidDetails(
-  "mailto:soporte@fbiembajadores.com",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
-  process.env.VAPID_PRIVATE_KEY || ""
-);
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -18,6 +12,22 @@ export async function POST(req: Request) {
     }
 
     const { user_id, message, link, type } = body.record;
+
+    // Inicializar VAPID dentro del handler (evita error de build si las keys no están al compilar)
+    const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+
+    if (!vapidPublic || !vapidPrivate) {
+      console.error("VAPID keys not configured");
+      return NextResponse.json({ error: "VAPID keys missing" }, { status: 500 });
+    }
+
+    try {
+      webpush.setVapidDetails("mailto:soporte@fbiembajadores.com", vapidPublic, vapidPrivate);
+    } catch (vapidErr: any) {
+      console.error("VAPID setup error:", vapidErr.message);
+      return NextResponse.json({ error: "VAPID key inválida: " + vapidErr.message }, { status: 500 });
+    }
 
     // Usamos la Service Role Key para evadir las directivas de seguridad RLS de la BD 
     // al ser llamado en el bg (sin usuario)
