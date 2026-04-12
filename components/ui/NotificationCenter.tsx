@@ -381,12 +381,19 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
           </div>
 
           <div className="px-5 py-3 border-t border-light-gray bg-cream/10 text-center flex flex-col items-center gap-2">
-             {!isSubscribed && (
+             {!isSubscribed ? (
                 <button 
                   onClick={handleSubscribePush}
-                  className="w-full bg-navy-dark text-white rounded-xl py-2 px-3 text-[11px] font-bold font-sans flex items-center justify-center gap-2 hover:bg-gold transition-colors"
+                  className="w-full bg-navy-dark text-white rounded-xl py-2 px-3 text-[11px] font-bold font-sans flex items-center justify-center gap-2 hover:bg-gold transition-colors block"
                 >
                   <Smartphone size={14} /> Activar Notificaciones Push
+                </button>
+             ) : (
+                <button 
+                  disabled
+                  className="w-full bg-green-500/10 text-green-700 rounded-xl py-2 px-3 text-[11px] font-bold font-sans flex items-center justify-center gap-2 block opacity-80 cursor-default"
+                >
+                  <Check size={14} className="text-green-600" /> Push Activadas
                 </button>
              )}
              <span className="text-[11px] font-sans text-navy-dark/40">Agente @FBI</span>
