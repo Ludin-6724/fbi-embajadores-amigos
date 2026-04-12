@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X } from "lucide-react";
+import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -12,9 +12,26 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [myStreak, setMyStreak] = useState<{ streak_days: number; max_streak: number } | null>(null);
   
   const supabase = createClient();
   const router = useRouter();
+
+  useEffect(() => {
+    if (initialProfile?.id) {
+      const loadStreak = async () => {
+        const { data } = await supabase
+          .from("streaks")
+          .select("streak_days, max_streak")
+          .eq("user_id", initialProfile.id)
+          .maybeSingle();
+        if (data) {
+          setMyStreak(data as any);
+        }
+      };
+      loadStreak();
+    }
+  }, [initialProfile?.id, supabase]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -167,6 +184,23 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
                         <p className="text-xs text-navy-dark/50 font-bold uppercase tracking-wider">Agente desde</p>
                         <p className="text-navy-dark font-sans font-medium">{createdAt}</p>
                     </div>
+                </div>
+            </div>
+
+            {/* Streak card */}
+            <div className="bg-cream/40 p-6 rounded-3xl border border-light-gray flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold">
+                        <Flame size={20} className="fill-gold" />
+                    </div>
+                    <div>
+                        <p className="text-xs text-navy-dark/50 font-bold uppercase tracking-wider">Llama Actual</p>
+                        <p className="text-navy-dark font-sans font-medium">{myStreak?.streak_days || 0} Días</p>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <p className="text-[10px] text-navy-dark/40 font-bold uppercase tracking-wider mb-1">Récord Histórico</p>
+                    <p className="text-gold font-sans font-bold text-xl">{myStreak?.max_streak || myStreak?.streak_days || 0}</p>
                 </div>
             </div>
 

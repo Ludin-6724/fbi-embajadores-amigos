@@ -8,12 +8,13 @@ export async function GET() {
     .from('streaks')
     .select(`
       streak_days,
+      max_streak,
       profiles (
         username,
         avatar_url
       )
     `)
-    .order('streak_days', { ascending: false })
+    .order('max_streak', { ascending: false })
     .limit(5);
 
   if (error) {

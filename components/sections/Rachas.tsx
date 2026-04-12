@@ -12,6 +12,7 @@ type Streak = {
   last_mission_title?: string | null;
   last_mission_note?: string | null;
   user_id: string;
+  max_streak?: number;
   profiles: { 
     username: string | null; 
     full_name: string | null;
@@ -76,8 +77,8 @@ export default function Rachas({
     try {
       let streaksQuery = supabase
         .from("streaks")
-        .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
-        .order("streak_days", { ascending: false })
+        .select("streak_days, max_streak, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
+        .order("max_streak", { ascending: false })
         .limit(20);
 
       if (communityId) streaksQuery = streaksQuery.eq('community_id', communityId);
@@ -92,7 +93,7 @@ export default function Rachas({
 
       if (streaksError) {
         console.warn("Retrying streak fetch:", streaksError.message);
-        const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, user_id, profiles(username)").limit(20);
+        const { data: fallback, error: fbErr } = await supabase.from("streaks").select("streak_days, max_streak, user_id, profiles(username)").order("max_streak", { ascending: false }).limit(20);
         if (fbErr) throw fbErr;
         const filtered = ((fallback as any) || []).filter((s: any) => !isTestUser(s)).slice(0, 10);
         setTopStreaks(filtered);
@@ -136,7 +137,7 @@ export default function Rachas({
 
     let myQuery = supabase
       .from("streaks")
-      .select("streak_days, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
+      .select("streak_days, max_streak, last_checkin, user_id, last_mission_title, last_mission_note, profiles(username, full_name, avatar_url)")
       .eq("user_id", uId);
     if (communityId) myQuery = myQuery.eq('community_id', communityId);
     else myQuery = myQuery.is('community_id', null);
@@ -148,7 +149,7 @@ export default function Rachas({
         // Fallback sin columnas de misión
         let fallbackQ = supabase
           .from("streaks")
-          .select("streak_days, last_checkin, user_id, profiles(username, full_name)")
+          .select("streak_days, max_streak, last_checkin, user_id, profiles(username, full_name)")
           .eq("user_id", uId);
         if (communityId) fallbackQ = fallbackQ.eq("community_id", communityId);
         else fallbackQ = fallbackQ.is("community_id", null);
@@ -187,9 +188,12 @@ export default function Rachas({
       }
     }
 
+    const newMaxStreak = Math.max(myStreak?.max_streak || 0, newDays);
+
     const payload = {
       user_id: userId, 
       streak_days: newDays, 
+      max_streak: newMaxStreak,
       last_checkin: new Date().toISOString(),
       last_mission_title: "Misión Completada",
       last_mission_note: missionNote.trim(),
@@ -225,7 +229,7 @@ export default function Rachas({
         try {
           await supabase.from("posts").insert({
             author_id: userId,
-            content: `🎯 ¡Acabo de registrar mi misión del día y logré una racha de ${newDays} días!\n\n"${missionNote.trim()}"`,
+            content: `🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${newDays} días (Récord: ${newMaxStreak} días) 🔥\n\n"${missionNote.trim()}"`,
             is_anonymous: false,
             community_id: communityId || null
           });
@@ -364,7 +368,10 @@ export default function Rachas({
                    <p className="text-4xl font-sans font-black text-gold leading-none">
                      {myStreak?.streak_days || 0}
                    </p>
-                   <span className="text-sm text-navy-dark/50 font-sans uppercase tracking-wider">días</span>
+                   <span className="text-sm text-navy-dark/50 font-sans uppercase tracking-wider block">días</span>
+                   {(myStreak?.max_streak || 0) > 0 && (
+                     <span className="text-[10px] text-navy-dark/40 font-bold uppercase tracking-wider block mt-1">Récord: {myStreak?.max_streak}</span>
+                   )}
                  </div>
                </div>
 
@@ -531,9 +538,14 @@ export default function Rachas({
                         </button>
                       )}
 
-                      <div className={`flex items-center gap-2 ${rStyle.text} font-bold font-sans text-xl bg-white px-4 py-2 rounded-xl border ${rStyle.border} flex-shrink-0 min-w-[80px] justify-center`}>
-                        <Flame size={20} className={idx < 3 ? "fill-current animate-pulse" : "fill-transparent"} />
-                        {streak.streak_days}
+                      <div className={`flex items-center gap-2 ${rStyle.text} font-bold font-sans bg-white px-3 py-2 rounded-xl border ${rStyle.border} flex-shrink-0 min-w-[80px] justify-center text-center`}>
+                        <div className="flex flex-col items-center leading-none">
+                           <span className="text-[9px] uppercase tracking-wider opacity-60 mb-1">Récord</span>
+                           <div className="flex items-center gap-1 text-xl">
+                             <Flame size={18} className={idx < 3 ? "fill-current animate-pulse" : "fill-transparent"} />
+                             {streak.max_streak || streak.streak_days}
+                           </div>
+                        </div>
                       </div>
                     </div>
                   </div>
