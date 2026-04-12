@@ -372,40 +372,34 @@ export default function Comunidad({
     if (!post) return;
     const mine = post.post_reactions.find(r => r.user_id === userId);
 
-    if (mine) {
-      if (mine.reaction === type) {
-        // Remove
+    if (mine && mine.reaction === type) {
+      // Quitar la misma reacción (toggle off) — Optimistic UI
+      setPosts(prev => prev.map(p => p.id === pId
+        ? { ...p, post_reactions: p.post_reactions.filter(r => r.user_id !== userId) } : p));
+      await supabase.from("post_reactions").delete().eq("user_id", userId).eq("post_id", pId);
+    } else {
+      // Agregar o cambiar reacción — Optimistic UI
+      setPosts(prev => prev.map(p => p.id === pId
+        ? { ...p, post_reactions: [...p.post_reactions.filter(r => r.user_id !== userId), { id: "opt_" + type, user_id: userId, reaction: type }] } : p));
+      // Borrar la anterior (si existe) e insertar nueva
+      await supabase.from("post_reactions").delete().eq("user_id", userId).eq("post_id", pId);
+      const { data, error } = await supabase.from("post_reactions")
+        .insert({ post_id: pId, user_id: userId, reaction: type })
+        .select("id, user_id, reaction").single() as { data: any, error: any };
+      if (error) {
+        // Revertir si falla
+        showToast("Error al reaccionar", false);
         setPosts(prev => prev.map(p => p.id === pId
-          ? { ...p, post_reactions: p.post_reactions.filter(r => r.id !== mine.id) } : p));
-        await supabase.from("post_reactions").delete().eq("id", mine.id);
-      } else {
-        // Change
+          ? { ...p, post_reactions: p.post_reactions.filter(r => r.user_id !== userId) } : p));
+      } else if (data) {
         setPosts(prev => prev.map(p => p.id === pId
-          ? { ...p, post_reactions: [...p.post_reactions.filter(r => r.user_id !== userId), { id: "temp", user_id: userId, reaction: type }] } : p));
-        await supabase.from("post_reactions").delete().eq("user_id", userId).eq("post_id", pId);
-        const { data } = await supabase.from("post_reactions")
-          .insert({ post_id: pId, user_id: userId, reaction: type })
-          .select("id, user_id, reaction").single() as { data: any };
-        if (data) setPosts(prev => prev.map(p => p.id === pId
           ? { ...p, post_reactions: p.post_reactions.map(r => r.user_id === userId ? data : r) } : p));
       }
-    } else {
-      // Add
-      setPosts(prev => prev.map(p => p.id === pId
-        ? { ...p, post_reactions: [...p.post_reactions, { id: "temp", user_id: userId, reaction: type }] } : p));
-      const { data } = await supabase.from("post_reactions")
-        .insert({ post_id: pId, user_id: userId, reaction: type })
-        .select("id, user_id, reaction").single() as { data: any };
-      if (data) setPosts(prev => prev.map(p => p.id === pId
-        ? { ...p, post_reactions: p.post_reactions.map(r => r.id === "temp" ? data : r) } : p));
     }
   };
 
   const handleToggleCommentReaction = async (commentId: string, postId: string, type: ReactionType) => {
-    if (!userId) {
-      showToast("Inicia sesión para reaccionar", false);
-      return;
-    }
+    if (!userId) { showToast("Inicia sesión para reaccionar", false); return; }
     
     const currentPreviews = commentPreviews[postId] || [];
     const comment = currentPreviews.find(c => c.id === commentId);
@@ -413,37 +407,35 @@ export default function Comunidad({
     
     const existingReaction = comment.comment_reactions?.find(r => r.user_id === userId);
     const isRemoving = existingReaction && existingReaction.reaction === type;
-    const isSwitching = existingReaction && existingReaction.reaction !== type;
 
+    // Optimistic UI
     setCommentPreviews(prev => {
       const ps = prev[postId] || [];
       return {
         ...prev,
         [postId]: ps.map(c => {
           if (c.id !== commentId) return c;
-          let newReactions = [...(c.comment_reactions || [])];
-          if (isRemoving) {
-            newReactions = newReactions.filter(r => r.user_id !== userId);
-          } else if (isSwitching) {
-            newReactions = newReactions.map(r => r.user_id === userId ? { ...r, reaction: type } : r);
-          } else {
-            newReactions.push({ id: "temp", user_id: userId, reaction: type });
-          }
+          const newReactions = isRemoving
+            ? (c.comment_reactions || []).filter(r => r.user_id !== userId)
+            : [...(c.comment_reactions || []).filter(r => r.user_id !== userId), { id: "opt_" + type, user_id: userId, reaction: type }];
           return { ...c, comment_reactions: newReactions };
         })
       };
     });
 
-    try {
-      if (isRemoving) {
-        await sbRef.current.from("comment_reactions").delete().eq("user_id", userId).eq("comment_id", commentId);
-      } else if (isSwitching) {
-        await sbRef.current.from("comment_reactions").delete().eq("user_id", userId).eq("comment_id", commentId);
-        await sbRef.current.from("comment_reactions").insert({ comment_id: commentId, user_id: userId, reaction: type });
-      } else {
-        await sbRef.current.from("comment_reactions").insert({ comment_id: commentId, user_id: userId, reaction: type });
+    // Aplicar a base de datos
+    await sbRef.current.from("comment_reactions").delete().eq("user_id", userId).eq("comment_id", commentId);
+    if (!isRemoving) {
+      const { error } = await sbRef.current.from("comment_reactions").insert({ comment_id: commentId, user_id: userId, reaction: type });
+      if (error) {
+        showToast("Error al reaccionar", false);
+        // Revertir optimistic
+        setCommentPreviews(prev => ({
+          ...prev,
+          [postId]: (prev[postId] || []).map(c => c.id !== commentId ? c : { ...c, comment_reactions: (c.comment_reactions || []).filter(r => r.user_id !== userId) })
+        }));
       }
-    } catch (e) { }
+    }
   };
 
   const handleAddComment = async (pId: string) => {
