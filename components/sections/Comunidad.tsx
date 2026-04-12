@@ -935,7 +935,7 @@ export default function Comunidad({
                                     </div>
                                   )}
                                   <div className="px-3 mt-1 flex">
-                                    <button onClick={() => setReplyingTo({ id: reply.id, username: reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente") })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder a este comentario</button>
+                                    <button onClick={() => setReplyingTo({ id: reply.id, username: reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente") })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
                                   </div>
                                 </div>
                               </div>
