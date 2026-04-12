@@ -27,6 +27,27 @@ const POST_SELECT = "id, author_id, content, is_anonymous, community_id, created
 
 const EMPTY_INITIAL_POSTS: Post[] = [];
 
+function getThreadDescendants(rootId: string, allComments: CommentPreview[]): CommentPreview[] {
+  const result: CommentPreview[] = [];
+  const mapByParent = new Map<string, CommentPreview[]>();
+  for (const c of allComments) {
+    if (!c.parent_id) continue;
+    const list = mapByParent.get(c.parent_id) || [];
+    list.push(c);
+    mapByParent.set(c.parent_id, list);
+  }
+
+  function traverse(parentId: string) {
+    const children = mapByParent.get(parentId) || [];
+    for (const child of children) {
+      result.push(child);
+      traverse(child.id);
+    }
+  }
+  traverse(rootId);
+  return result.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
 export default function Comunidad({
   communityId, initialTab = "muro", hideTabs = false,
   postId, initialProfile, isAllowedToFetch = true, initialPosts = EMPTY_INITIAL_POSTS
@@ -854,7 +875,7 @@ export default function Comunidad({
 
                           {/* REPLIES */}
                           <div className="pl-11 space-y-3">
-                            {previews.filter(r => r.parent_id === rootC.id).map(reply => (
+                            {getThreadDescendants(rootC.id, previews).map(reply => (
                               <div key={reply.id} className="flex gap-2.5">
                                 <CornerDownRight size={14} className="text-navy-dark/20 mt-1.5 flex-shrink-0" />
                                 <div className="w-6 h-6 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
@@ -913,6 +934,9 @@ export default function Comunidad({
                                       )}
                                     </div>
                                   )}
+                                  <div className="px-3 mt-1 flex">
+                                    <button onClick={() => setReplyingTo({ id: reply.id, username: reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente") })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder a este comentario</button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
