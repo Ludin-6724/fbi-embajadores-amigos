@@ -84,6 +84,21 @@ export default function Comunidad({
   const hasFetched = useRef(false);
   const fetchCtxRef = useRef("");
   const bootstrapDoneRef = useRef("");
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleInitiateReply = useCallback((id: string, username: string) => {
+    setReplyingTo({ id, username });
+    setCommentText(`@${username} `);
+    
+    // Smooth scroll and focus
+    setTimeout(() => {
+      commentInputRef.current?.focus();
+      if (commentInputRef.current) {
+        const len = commentInputRef.current.value.length;
+        commentInputRef.current.setSelectionRange(len, len);
+      }
+    }, 100);
+  }, []);
 
   const initialPostsSignature = useMemo(
     () => (initialPosts.length ? initialPosts.map((p) => p.id).join("|") : ""),
@@ -859,7 +874,7 @@ export default function Comunidad({
                                       {rootC.comment_reactions?.some(r => r.user_id === userId) ? labelMap[rootC.comment_reactions.find(r => r.user_id === userId)!.reaction] : "Reaccionar"}
                                     </button>
                                   </ReactionPicker>
-                                  <button onClick={() => setReplyingTo({ id: rootC.id, username: rootC.is_anonymous ? "Agente Anónimo" : (rootC.profiles?.username || "Agente") })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
+                                  <button onClick={() => handleInitiateReply(rootC.id, rootC.is_anonymous ? "Agente Anónimo" : (rootC.profiles?.username || "Agente"))} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
                                   {rootC.comment_reactions && rootC.comment_reactions.length > 0 && (
                                     <div className="flex items-center gap-0.5 ml-auto">
                                       {Array.from(new Set(rootC.comment_reactions.map(r => r.reaction))).slice(0, 3).map(t => (
@@ -935,7 +950,7 @@ export default function Comunidad({
                                     </div>
                                   )}
                                   <div className="px-3 mt-1 flex">
-                                    <button onClick={() => setReplyingTo({ id: reply.id, username: reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente") })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
+                                    <button onClick={() => handleInitiateReply(reply.id, reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente"))} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
                                   </div>
                                 </div>
                               </div>
@@ -971,6 +986,7 @@ export default function Comunidad({
                             </div>
                             <div className="flex-1 flex flex-col gap-2">
                                <textarea
+                                 ref={commentInputRef}
                                  value={commentText}
                                  onChange={e => setCommentText(e.target.value)}
                                  placeholder={replyingTo ? "Escribe tu respuesta..." : "Escribe un comentario..."}
