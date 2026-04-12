@@ -391,7 +391,7 @@ export default function Comunidad({
         .upsert({ post_id: pId, user_id: userId, reaction: type }, { onConflict: "post_id,user_id" })
         .select("id, user_id, reaction").single() as { data: any, error: any };
       if (error) {
-        showToast("Error al reaccionar", false);
+        showToast("Error: " + (error.message || "upsert falló"), false);
         setPosts(prev => prev.map(p => p.id === pId
           ? { ...p, post_reactions: p.post_reactions.filter(r => r.user_id !== userId) } : p));
       } else if (data) {
