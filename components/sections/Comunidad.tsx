@@ -48,6 +48,12 @@ function getThreadDescendants(rootId: string, allComments: CommentPreview[]): Co
   return result.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
+function findRootParentId(commentId: string, allComments: CommentPreview[]): string {
+  const current = allComments.find(c => c.id === commentId);
+  if (!current || !current.parent_id) return commentId;
+  return findRootParentId(current.parent_id, allComments);
+}
+
 export default function Comunidad({
   communityId, initialTab = "muro", hideTabs = false,
   postId, initialProfile, isAllowedToFetch = true, initialPosts = EMPTY_INITIAL_POSTS
@@ -77,6 +83,7 @@ export default function Comunidad({
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [inlinePostContent, setInlinePostContent] = useState("");
   const [isSubmittingInline, setIsSubmittingInline] = useState(false);
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -99,6 +106,13 @@ export default function Comunidad({
       }
     }, 100);
   }, []);
+
+  const toggleExpand = (commentId: string) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
 
   const initialPostsSignature = useMemo(
     () => (initialPosts.length ? initialPosts.map((p) => p.id).join("|") : ""),
@@ -448,10 +462,17 @@ export default function Comunidad({
 
       if (insertError) throw insertError;
       
-      setCommentPreviews(prev => ({
-        ...prev,
-        [pId]: [...(prev[pId] || []), data]
-      }));
+      setCommentPreviews(prev => {
+        const updatedPreviews = [...(prev[pId] || []), data];
+        if (data.parent_id) {
+          const rootId = findRootParentId(data.parent_id, updatedPreviews);
+          setExpandedComments(ex => ({ ...ex, [rootId]: true }));
+        }
+        return {
+          ...prev,
+          [pId]: updatedPreviews
+        };
+      });
       setCommentCounts(prev => ({
         ...prev,
         [pId]: (prev[pId] || 0) + 1
@@ -889,75 +910,97 @@ export default function Comunidad({
                           </div>
 
                           {/* REPLIES */}
-                          <div className="pl-11 space-y-3">
-                            {getThreadDescendants(rootC.id, previews).map(reply => (
-                              <div key={reply.id} className="flex gap-2.5">
-                                <CornerDownRight size={14} className="text-navy-dark/20 mt-1.5 flex-shrink-0" />
-                                <div className="w-6 h-6 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
-                                  {reply.is_anonymous ? <Fingerprint size={10} className="text-gold" /> : reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} className="w-full h-full object-cover" /> : (reply.profiles?.username?.[0]?.toUpperCase() ?? "A")}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="bg-gray-50/80 rounded-2xl px-3 py-2 relative group">
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                      <p className="text-[11px] font-bold text-navy-dark">{reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente")}</p>
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-[9px] text-navy-dark/40">{timeAgo(reply.created_at)}</p>
-                                        {userId === reply.author_id && (
-                                          <div className="relative">
-                                            <button onClick={() => setOpenDropdownId(openDropdownId === reply.id ? null : reply.id)} className="text-navy-dark/30 hover:text-navy-dark/70 transition-colors p-1"><MoreHorizontal size={12}/></button>
-                                            {openDropdownId === reply.id && (
-                                              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gold/10 py-1 z-20 overflow-hidden">
-                                                <button onClick={() => { setEditingCommentId(reply.id); setEditContent(reply.content); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-[10px] font-bold text-navy-dark/70 hover:bg-gray-50 flex items-center gap-2"><Pen size={10}/> Editar</button>
-                                                <button onClick={() => handleDeleteComment(reply.id, post.id)} className="w-full text-left px-4 py-2 text-[10px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"><Trash2 size={10}/> Eliminar</button>
+                          {getThreadDescendants(rootC.id, previews).length > 0 && (
+                            <div className="pl-6 ml-4 mt-2 border-l-2 border-gray-100 space-y-4 relative">
+                              {!expandedComments[rootC.id] ? (
+                                <button 
+                                  onClick={() => toggleExpand(rootC.id)}
+                                  className="text-[11px] font-bold text-navy-dark/40 hover:text-gold transition-colors flex items-center gap-2 group py-1"
+                                >
+                                  <div className="w-6 h-[1px] bg-gray-100 group-hover:bg-gold transition-colors absolute -left-[1px] top-1/2" />
+                                  Ver {getThreadDescendants(rootC.id, previews).length} respuesta{getThreadDescendants(rootC.id, previews).length !== 1 ? 's' : ''}
+                                </button>
+                              ) : (
+                                <>
+                                  <button 
+                                    onClick={() => toggleExpand(rootC.id)}
+                                    className="text-[11px] font-bold text-navy-dark/40 hover:text-gold transition-colors flex items-center gap-2 group py-1 mb-2"
+                                  >
+                                    <div className="w-6 h-[1px] bg-gray-100 group-hover:bg-gold transition-colors absolute -left-[1px] top-4" />
+                                    Ocultar respuestas
+                                  </button>
+                                  {getThreadDescendants(rootC.id, previews).map(reply => (
+                                    <div key={reply.id} className="flex gap-2.5 relative group/reply">
+                                      <div className="absolute -left-[24px] top-4 w-6 h-[1px] bg-gray-100 group-hover/reply:bg-gold transition-colors" />
+                                      <div className="w-6 h-6 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
+                                        {reply.is_anonymous ? <Fingerprint size={10} className="text-gold" /> : reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} className="w-full h-full object-cover" /> : (reply.profiles?.username?.[0]?.toUpperCase() ?? "A")}
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="bg-gray-50/80 rounded-2xl px-3 py-2 relative group">
+                                          <div className="flex items-center justify-between gap-2 mb-1">
+                                            <p className="text-[11px] font-bold text-navy-dark">{reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente")}</p>
+                                            <div className="flex items-center gap-2">
+                                              <p className="text-[9px] text-navy-dark/40">{timeAgo(reply.created_at)}</p>
+                                              {userId === reply.author_id && (
+                                                <div className="relative">
+                                                  <button onClick={() => setOpenDropdownId(openDropdownId === reply.id ? null : reply.id)} className="text-navy-dark/30 hover:text-navy-dark/70 transition-colors p-1"><MoreHorizontal size={12}/></button>
+                                                  {openDropdownId === reply.id && (
+                                                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gold/10 py-1 z-20 overflow-hidden">
+                                                      <button onClick={() => { setEditingCommentId(reply.id); setEditContent(reply.content); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-[10px] font-bold text-navy-dark/70 hover:bg-gray-50 flex items-center gap-2"><Pen size={10}/> Editar</button>
+                                                      <button onClick={() => handleDeleteComment(reply.id, post.id)} className="w-full text-left px-4 py-2 text-[10px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"><Trash2 size={10}/> Eliminar</button>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {editingCommentId === reply.id ? (
+                                            <div className="mt-2">
+                                              <textarea autoFocus value={editContent} onChange={e => setEditContent(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-[11px] focus:ring-1 focus:ring-gold outline-none resize-none" rows={2}/>
+                                              <div className="flex justify-end gap-2 mt-2">
+                                                <button onClick={() => setEditingCommentId(null)} className="text-[9px] font-bold text-navy-dark/50 hover:text-navy-dark px-2">Cancelar</button>
+                                                <button onClick={() => handleEditComment(reply.id, post.id)} className="text-[9px] bg-navy-dark text-white px-2 py-1 rounded-full font-bold">Guardar</button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <p className="text-[11px] text-navy-dark/80 leading-relaxed whitespace-pre-wrap">{reply.content}</p>
+                                          )}
+                                        </div>
+                                        {/* Sub-Reply actions */}
+                                        {!editingCommentId && (
+                                          <div className="px-3 mt-1 flex items-center gap-3">
+                                            <ReactionPicker
+                                              onSelect={t => handleToggleCommentReaction(reply.id, post.id, t)}
+                                              disabled={!userId}
+                                              currentReaction={reply.comment_reactions?.find(r => r.user_id === userId)?.reaction}
+                                            >
+                                              <button className={`text-[9px] font-bold transition-colors select-none ${reply.comment_reactions?.some(r => r.user_id === userId) ? "text-gold" : "text-navy-dark/40 hover:text-gold"}`}>
+                                                {reply.comment_reactions?.some(r => r.user_id === userId) ? labelMap[reply.comment_reactions.find(r => r.user_id === userId)!.reaction] : "Me gusta"}
+                                              </button>
+                                            </ReactionPicker>
+                                            {reply.comment_reactions && reply.comment_reactions.length > 0 && (
+                                              <div className="flex items-center gap-0.5 ml-auto">
+                                                {Array.from(new Set(reply.comment_reactions.map(r => r.reaction))).slice(0, 2).map(t => (
+                                                  <span key={t} className="text-[9px] leading-none">{emojiMap[t]}</span>
+                                                ))}
+                                                <span className="text-[8px] text-navy-dark/40 ml-0.5">{reply.comment_reactions.length}</span>
                                               </div>
                                             )}
                                           </div>
                                         )}
-                                      </div>
-                                    </div>
-                                    {editingCommentId === reply.id ? (
-                                      <div className="mt-2">
-                                        <textarea autoFocus value={editContent} onChange={e => setEditContent(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-[11px] focus:ring-1 focus:ring-gold outline-none resize-none" rows={2}/>
-                                        <div className="flex justify-end gap-2 mt-2">
-                                          <button onClick={() => setEditingCommentId(null)} className="text-[9px] font-bold text-navy-dark/50 hover:text-navy-dark px-2">Cancelar</button>
-                                          <button onClick={() => handleEditComment(reply.id, post.id)} className="text-[9px] bg-navy-dark text-white px-2 py-1 rounded-full font-bold">Guardar</button>
+                                        <div className="px-3 mt-1 flex">
+                                          <button onClick={() => handleInitiateReply(reply.id, reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente"))} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
                                         </div>
                                       </div>
-                                    ) : (
-                                      <p className="text-[11px] text-navy-dark/80 leading-relaxed whitespace-pre-wrap">{reply.content}</p>
-                                    )}
-                                  </div>
-                                  {/* Sub-Reply actions */}
-                                  {!editingCommentId && (
-                                    <div className="px-3 mt-1 flex items-center gap-3">
-                                      <ReactionPicker
-                                        onSelect={t => handleToggleCommentReaction(reply.id, post.id, t)}
-                                        disabled={!userId}
-                                        currentReaction={reply.comment_reactions?.find(r => r.user_id === userId)?.reaction}
-                                      >
-                                        <button className={`text-[9px] font-bold transition-colors select-none ${reply.comment_reactions?.some(r => r.user_id === userId) ? "text-gold" : "text-navy-dark/40 hover:text-gold"}`}>
-                                          {reply.comment_reactions?.some(r => r.user_id === userId) ? labelMap[reply.comment_reactions.find(r => r.user_id === userId)!.reaction] : "Me gusta"}
-                                        </button>
-                                      </ReactionPicker>
-                                      {reply.comment_reactions && reply.comment_reactions.length > 0 && (
-                                        <div className="flex items-center gap-0.5 ml-auto">
-                                          {Array.from(new Set(reply.comment_reactions.map(r => r.reaction))).slice(0, 2).map(t => (
-                                            <span key={t} className="text-[9px] leading-none">{emojiMap[t]}</span>
-                                          ))}
-                                          <span className="text-[8px] text-navy-dark/40 ml-0.5">{reply.comment_reactions.length}</span>
-                                        </div>
-                                      )}
                                     </div>
-                                  )}
-                                  <div className="px-3 mt-1 flex">
-                                    <button onClick={() => handleInitiateReply(reply.id, reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente"))} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
+
                       {!postId && extraComments > 0 && (
                         <Link
                           href={`/post/${post.id}`}
