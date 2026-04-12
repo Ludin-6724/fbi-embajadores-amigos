@@ -11,6 +11,7 @@ import { cache } from "@/lib/utils/cache";
 type ReactionRow = { id: string; user_id: string; reaction: ReactionType };
 type CommentPreview = {
   id: string; post_id: string; author_id: string; parent_id: string | null; content: string; created_at: string;
+  is_anonymous?: boolean;
   profiles: { username: string | null; avatar_url: string | null } | null;
   comment_reactions?: ReactionRow[];
 };
@@ -45,6 +46,7 @@ export default function Comunidad({
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [isAnonymousComment, setIsAnonymousComment] = useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export default function Comunidad({
     try {
       let q = supabase
         .from("comments")
-        .select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url), comment_reactions(id, user_id, reaction)")
+        .select("id, post_id, author_id, parent_id, content, created_at, is_anonymous, profiles(username, avatar_url), comment_reactions(id, user_id, reaction)")
         .in("post_id", postIds)
         .order("created_at", { ascending: false });
         
@@ -404,8 +406,9 @@ export default function Comunidad({
         post_id: pId,
         author_id: userId,
         content: commentText.trim(),
-        parent_id: replyingTo?.id || null
-      }).select("id, post_id, author_id, parent_id, content, created_at, profiles(username, avatar_url)").single() as { data: any, error: any };
+        parent_id: replyingTo?.id || null,
+        is_anonymous: isAnonymousComment || (activeTab === "oratorio" && isAnonymousComment === undefined)
+      }).select("id, post_id, author_id, parent_id, content, created_at, is_anonymous, profiles(username, avatar_url)").single() as { data: any, error: any };
 
       if (insertError) throw insertError;
       
@@ -419,6 +422,7 @@ export default function Comunidad({
       }));
       setCommentText("");
       setReplyingTo(null);
+      setIsAnonymousComment(false);
     } catch (err: any) {
       showToast(`Error: ${err.message || "Error al comentar"}`, false);
     } finally {
@@ -789,12 +793,12 @@ export default function Comunidad({
                           {/* ROOT COMMENT */}
                           <div className="flex gap-3">
                             <div className="w-8 h-8 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
-                              {rootC.profiles?.avatar_url ? <img src={rootC.profiles.avatar_url} className="w-full h-full object-cover" /> : (rootC.profiles?.username?.[0]?.toUpperCase() ?? "A")}
+                              {rootC.is_anonymous ? <Fingerprint size={14} className="text-gold" /> : rootC.profiles?.avatar_url ? <img src={rootC.profiles.avatar_url} className="w-full h-full object-cover" /> : (rootC.profiles?.username?.[0]?.toUpperCase() ?? "A")}
                             </div>
                             <div className="flex-1">
                               <div className="bg-gray-50/80 rounded-2xl px-4 py-2.5 relative group">
                                 <div className="flex items-center justify-between gap-2 mb-1">
-                                  <p className="text-[12px] font-bold text-navy-dark">{rootC.profiles?.username || "Agente"}</p>
+                                  <p className="text-[12px] font-bold text-navy-dark">{rootC.is_anonymous ? "Agente Anónimo" : (rootC.profiles?.username || "Agente")}</p>
                                   <div className="flex items-center gap-2">
                                     <p className="text-[9px] text-navy-dark/40">{timeAgo(rootC.created_at)}</p>
                                     {userId === rootC.author_id && (
@@ -834,7 +838,7 @@ export default function Comunidad({
                                       {rootC.comment_reactions?.some(r => r.user_id === userId) ? labelMap[rootC.comment_reactions.find(r => r.user_id === userId)!.reaction] : "Reaccionar"}
                                     </button>
                                   </ReactionPicker>
-                                  <button onClick={() => setReplyingTo({ id: rootC.id, username: rootC.profiles?.username || "Agente" })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
+                                  <button onClick={() => setReplyingTo({ id: rootC.id, username: rootC.is_anonymous ? "Agente Anónimo" : (rootC.profiles?.username || "Agente") })} className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors select-none">Responder</button>
                                   {rootC.comment_reactions && rootC.comment_reactions.length > 0 && (
                                     <div className="flex items-center gap-0.5 ml-auto">
                                       {Array.from(new Set(rootC.comment_reactions.map(r => r.reaction))).slice(0, 3).map(t => (
@@ -854,12 +858,12 @@ export default function Comunidad({
                               <div key={reply.id} className="flex gap-2.5">
                                 <CornerDownRight size={14} className="text-navy-dark/20 mt-1.5 flex-shrink-0" />
                                 <div className="w-6 h-6 rounded-full bg-cream flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-gold border border-gold/20 overflow-hidden mt-0.5">
-                                  {reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} className="w-full h-full object-cover" /> : (reply.profiles?.username?.[0]?.toUpperCase() ?? "A")}
+                                  {reply.is_anonymous ? <Fingerprint size={10} className="text-gold" /> : reply.profiles?.avatar_url ? <img src={reply.profiles.avatar_url} className="w-full h-full object-cover" /> : (reply.profiles?.username?.[0]?.toUpperCase() ?? "A")}
                                 </div>
                                 <div className="flex-1">
                                   <div className="bg-gray-50/80 rounded-2xl px-3 py-2 relative group">
                                     <div className="flex items-center justify-between gap-2 mb-1">
-                                      <p className="text-[11px] font-bold text-navy-dark">{reply.profiles?.username || "Agente"}</p>
+                                      <p className="text-[11px] font-bold text-navy-dark">{reply.is_anonymous ? "Agente Anónimo" : (reply.profiles?.username || "Agente")}</p>
                                       <div className="flex items-center gap-2">
                                         <p className="text-[9px] text-navy-dark/40">{timeAgo(reply.created_at)}</p>
                                         {userId === reply.author_id && (
@@ -955,7 +959,14 @@ export default function Comunidad({
                                    }
                                  }}
                                />
-                               <div className="flex justify-end">
+                               <div className="flex items-center justify-between pt-2">
+                                 <label className="flex items-center gap-2 cursor-pointer group select-none">
+                                   <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isAnonymousComment ? "bg-navy-dark border-navy-dark" : "border-gray-300 bg-white group-hover:border-navy-dark"}`}>
+                                      {isAnonymousComment && <CornerDownRight size={10} className="text-white transform rotate-45" />}
+                                   </div>
+                                   <span className="text-[11px] font-sans text-navy-dark/70 font-medium group-hover:text-navy-dark transition-colors">Comentar de forma anónima</span>
+                                   <input type="checkbox" checked={isAnonymousComment} onChange={(e) => setIsAnonymousComment(e.target.checked)} className="hidden" />
+                                 </label>
                                  <button 
                                    onClick={() => handleAddComment(post.id)}
                                    disabled={isSubmittingComment || !commentText.trim()}
