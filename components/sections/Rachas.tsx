@@ -415,82 +415,33 @@ export default function Rachas({
 
       <div className="container mx-auto px-4 md:px-8 relative z-10">
 
-        {/* ── Puntos y Protectores ─────────────────────────────── */}
+        {/* ── Estado de Protección Slim ─────────────────────────────── */}
         {userId && (
-          <div className="max-w-4xl mx-auto mb-12">
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              {/* Puntos */}
-              <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-2xl p-5 border border-amber-200/50 relative overflow-hidden group hover:shadow-md transition-all">
-                <div className="absolute -top-4 -right-4 w-20 h-20 bg-amber-300/10 rounded-full blur-lg group-hover:bg-amber-300/20 transition-all" />
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center">
-                    <Coins size={22} className="text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-amber-800/60 font-bold uppercase tracking-widest">Mis Puntos</p>
-                    <p className="text-2xl font-black text-amber-700 font-sans leading-none">{myPoints}</p>
-                  </div>
-                </div>
-                <p className="text-[10px] text-amber-700/50 font-sans font-medium">+10 🪙 por cada día de racha</p>
-              </div>
-
-              {/* Protectores */}
-              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 rounded-2xl p-5 border border-indigo-200/50 relative overflow-hidden group hover:shadow-md transition-all">
-                <div className="absolute -top-4 -right-4 w-20 h-20 bg-indigo-300/10 rounded-full blur-lg group-hover:bg-indigo-300/20 transition-all" />
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center">
-                    <Shield size={22} className="text-indigo-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-indigo-800/60 font-bold uppercase tracking-widest">Protectores</p>
-                    <p className="text-2xl font-black text-indigo-700 font-sans leading-none">{myProtectors}</p>
-                  </div>
-                </div>
-                <p className="text-[10px] text-indigo-700/50 font-sans font-medium">Salvan tu racha si faltas</p>
-              </div>
-            </div>
-
-            {/* ── Tienda de Agente ─────────────────────────────── */}
-            {/* ── Estado de Protección ─────────────────────────────── */}
-            <div className={`rounded-3xl p-6 md:p-8 shadow-sm border relative overflow-hidden ${
-              myProtectors > 0 
-                ? "bg-green-50/50 border-green-200" 
-                : "bg-red-50/50 border-red-100"
-            }`}>
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-                  myProtectors > 0 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"
-                }`}>
-                  <Shield size={32} />
-                </div>
-                <div className="flex-1 text-center md:text-left">
-                  <h3 className={`font-serif text-2xl font-bold mb-2 ${
-                    myProtectors > 0 ? "text-green-800" : "text-red-800"
-                  }`}>
-                    {myProtectors > 0 ? "¡Tu racha está Asegurada! 🛡️" : "Tu racha está Vulnerable ⚠️"}
-                  </h3>
-                  <p className="text-sm font-sans text-navy-dark/70 leading-relaxed max-w-2xl">
-                    {myProtectors > 0 
-                      ? "Tienes escudos activos. Si olvidas reportar tu misión un día, el sistema consumirá un escudo automáticamente para salvar tu Llama y que no vuelva a cero. ¡Pero intenta no faltar!" 
-                      : "No tienes escudos. Si finaliza el día sin registrar tu misión diaria, tu Llama volverá a cero. Ve a la Tienda para canjear tus puntos por escudos."
-                    }
-                  </p>
-                </div>
-                {myProtectors === 0 && (
-                  <button
-                    onClick={() => {
-                      window.dispatchEvent(new CustomEvent("fbi:change-tab", { detail: "shop" }));
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    className="px-6 py-3 bg-navy-dark text-white font-bold rounded-full text-sm hover:bg-gold hover:text-navy-dark transition-all shadow-md active:scale-95 whitespace-nowrap"
-                  >
-                    Ir a la Tienda
-                  </button>
-                )}
-              </div>
-            </div>
+          <div className="max-w-4xl mx-auto mb-8 flex justify-end">
+             <div className={`inline-flex flex-wrap items-center gap-2 px-4 py-2 rounded-full border ${
+               myProtectors > 0 ? "bg-green-50/50 border-green-200" : "bg-red-50/50 border-red-100"
+             }`}>
+               <Shield size={14} className={myProtectors > 0 ? "text-green-600" : "text-red-500"} />
+               <span className={`text-[11px] font-bold uppercase tracking-wider ${
+                 myProtectors > 0 ? "text-green-800" : "text-red-800"
+               }`}>
+                 {myProtectors > 0 ? `${myProtectors} Protector(es) Activos` : "Llama Vulnerable (0 Protectores)"}
+               </span>
+               {myProtectors === 0 && (
+                 <button
+                   onClick={() => {
+                     window.dispatchEvent(new CustomEvent("fbi:change-tab", { detail: "shop" }));
+                     window.scrollTo({ top: 0, behavior: "smooth" });
+                   }}
+                   className="text-[11px] font-bold text-gold hover:underline ml-2"
+                 >
+                   Comprar 👉
+                 </button>
+               )}
+             </div>
           </div>
         )}
+
 
         {/* ── Tu Llama & Misión ────────────────────────────────── */}
         <div className="flex flex-col md:flex-row items-start lg:items-center gap-16 lg:gap-24 mb-16">
