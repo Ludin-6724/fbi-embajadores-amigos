@@ -88,6 +88,7 @@ export default function Comunidad({
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [showPostSheet, setShowPostSheet] = useState(false);
   const [checkingStreak, setCheckingStreak] = useState(false);
+  const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -135,6 +136,25 @@ export default function Comunidad({
       if (data?.session?.user) setUserId(data.session.user.id);
     });
   }, [initialProfile]);
+
+  // Check streak status when opening post sheet
+  useEffect(() => {
+    if (showPostSheet && userId) {
+      setCheckingStreak(true);
+      sbRef.current.from("streaks").select("last_checkin").eq("user_id", userId).is("community_id", communityId || null).maybeSingle().then(({data}) => {
+        if (data && data.last_checkin) {
+           const today = new Date();
+           today.setHours(0,0,0,0);
+           const last = new Date(data.last_checkin);
+           last.setHours(0,0,0,0);
+           setHasCheckedInToday(today.getTime() === last.getTime());
+        } else {
+           setHasCheckedInToday(false);
+        }
+        setCheckingStreak(false);
+      });
+    }
+  }, [showPostSheet, userId, communityId]);
 
   // Helper to fetch comments for a list of post IDs
   const fetchCommentsForPosts = useCallback(async (postIds: string[]) => {
@@ -1129,9 +1149,9 @@ export default function Comunidad({
             </div>
             <div className="p-4 pb-12 sm:pb-4 flex flex-col gap-3 bg-gray-50 max-h-[85vh] overflow-y-auto">
               <button
-                disabled={checkingStreak}
+                disabled={checkingStreak || hasCheckedInToday}
                 onClick={async () => {
-                  if (!userId) {
+                  if (!userId || hasCheckedInToday) {
                     return;
                   }
                   setCheckingStreak(true);
@@ -1210,19 +1230,27 @@ export default function Comunidad({
                   setCheckingStreak(false);
                 }}
                 className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between group transition-all ${
-                  checkingStreak ? "opacity-50 cursor-not-allowed bg-gray-100 border-gray-200" : "bg-white border-gold/30 shadow-sm hover:shadow-md hover:border-gold hover:bg-gold/5 active:scale-[0.98]"
+                  checkingStreak 
+                    ? "opacity-50 cursor-not-allowed bg-gray-100 border-gray-200" 
+                    : hasCheckedInToday
+                      ? "bg-emerald-50 border-emerald-200 cursor-not-allowed opacity-90"
+                      : "bg-white border-gold/30 shadow-sm hover:shadow-md hover:border-gold hover:bg-gold/5 active:scale-[0.98]"
                 }`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-orange-400 to-amber-500 flex items-center justify-center text-white shadow-inner flex-shrink-0">
-                    {checkingStreak ? <Loader2 size={24} className="animate-spin" /> : <Flame size={24} fill="currentColor" />}
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-inner flex-shrink-0 ${hasCheckedInToday ? 'bg-emerald-500' : 'bg-gradient-to-tr from-orange-400 to-amber-500'}`}>
+                    {checkingStreak ? <Loader2 size={24} className="animate-spin text-white" /> : <Flame size={24} fill="currentColor" />}
                   </div>
                   <div>
-                    <h4 className="font-serif font-bold text-navy-dark text-lg">Registrar Misión y Racha</h4>
-                    <p className="font-sans text-xs text-navy-dark/60 mt-0.5">Recibirás puntos y actualizarás tus días</p>
+                    <h4 className={`font-serif font-bold text-lg ${hasCheckedInToday ? 'text-emerald-800' : 'text-navy-dark'}`}>
+                       {hasCheckedInToday ? "Misión Completada" : "Registrar Misión y Racha"}
+                    </h4>
+                    <p className={`font-sans text-xs mt-0.5 ${hasCheckedInToday ? 'text-emerald-700' : 'text-navy-dark/60'}`}>
+                       {hasCheckedInToday ? "¡Ya sumaste tus puntos de hoy! 🎉" : "Recibirás puntos y actualizarás tus días"}
+                    </p>
                   </div>
                 </div>
-                <ChevronRight className="text-gray-300 group-hover:text-gold transition-colors" />
+                {!hasCheckedInToday && <ChevronRight className="text-gray-300 group-hover:text-gold transition-colors" />}
               </button>
 
               <button
