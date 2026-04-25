@@ -290,7 +290,6 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
             </button>
         </div>
 
-              </div>
            </div>
         </div>
       )}
