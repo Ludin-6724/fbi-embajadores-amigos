@@ -652,33 +652,26 @@ export default function Comunidad({
             )}
 
             {/* Inline Post Trigger (Fake Box) */}
-            {!postId && (
+            {!postId && activeTab !== "oratorio" && !inlinePostContent && (
               <div 
                 className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-gray-100 p-4 mb-4 flex gap-3 items-center cursor-pointer hover:bg-gray-50/50 transition-colors"
-                onClick={() => {
-                  if (activeTab === "oratorio") {
-                    // Oratorio just uses normal typing immediately
-                    document.getElementById("inline-real-content")?.focus();
-                  } else {
-                    setShowPostSheet(true);
-                  }
-                }}
+                onClick={() => setShowPostSheet(true)}
               >
                 <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {initialProfile?.avatar_url && activeTab !== "oratorio"
+                  {initialProfile?.avatar_url 
                     ? <img src={initialProfile.avatar_url} className="w-full h-full object-cover" alt="" />
-                    : <span className="font-bold text-gold text-sm">{activeTab === "oratorio" ? <Fingerprint size={18} /> : (initialProfile?.full_name?.[0] || "A")}</span>
+                    : <span className="font-bold text-gold text-sm">{initialProfile?.full_name?.[0] || "A"}</span>
                   }
                 </div>
                 <div className="flex-1 bg-gray-50 border border-gray-200 rounded-full px-4 py-3 text-sm text-gray-400 font-sans">
-                  {activeTab === "muro" ? "¿Qué tienes para compartir hoy agente?" : "Escribe tu petición o testimonio de forma anónima..."}
+                  ¿Qué tienes para compartir hoy agente?
                 </div>
               </div>
             )}
 
-            {/* Always mount the actual TextArea but only show it if they are typing OR selected an option */}
+            {/* Always mount the actual TextArea but only show it if they are typing OR selected an option OR are in Oratorio */}
             {!postId && (inlinePostContent.trim() !== "" || activeTab === "oratorio") && (
-              <div className={`bg-white rounded-2xl shadow-sm border border-gold/20 p-4 mb-4 flex gap-3 items-start animate-fade-in ${inlinePostContent ? 'block' : 'hidden'}`}>
+              <div className={`bg-white rounded-2xl shadow-sm border border-gold/20 p-4 mb-4 flex gap-3 items-start animate-fade-in`}>
                 <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {initialProfile?.avatar_url && activeTab !== "oratorio"
                     ? <img src={initialProfile.avatar_url} className="w-full h-full object-cover" alt="" />
@@ -1133,7 +1126,7 @@ export default function Comunidad({
                 <X size={20} />
               </button>
             </div>
-            <div className="p-4 flex flex-col gap-3 bg-gray-50">
+            <div className="p-4 pb-12 sm:pb-4 flex flex-col gap-3 bg-gray-50 max-h-[85vh] overflow-y-auto">
               <button
                 disabled={checkingStreak}
                 onClick={async () => {
