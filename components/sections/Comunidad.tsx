@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X, Flame } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
@@ -1113,7 +1114,7 @@ export default function Comunidad({
       </div>
 
       {/* Post Strategy Bottom Sheet */}
-      {showPostSheet && (
+      {showPostSheet && typeof window !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-navy-dark/60 backdrop-blur-sm animate-fade-in sm:items-center">
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up relative">
             <div className="absolute top-3 w-12 h-1.5 bg-gray-200 rounded-full left-1/2 -translate-x-1/2 sm:hidden" />
@@ -1246,7 +1247,8 @@ export default function Comunidad({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   );
