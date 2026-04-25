@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Comunidad from "./Comunidad";
 
-export default function ProfileSection({ profile: initialProfile }: { profile: any }) {
+export default function ProfileSection({ profile: initialProfile, isOwnProfile = true }: { profile: any, isOwnProfile?: boolean }) {
   const [profile, setProfile] = useState(initialProfile);
   const [isEditing, setIsEditing] = useState(false);
   const [newUsername, setNewUsername] = useState(profile?.username || "");
@@ -98,15 +98,17 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
   return (
     <section className="py-12 bg-white min-h-[80vh]">
       <div className="container mx-auto px-4 max-w-2xl">
-        {/* Header / Avatar */}
+         {/* Header / Avatar */}
         <div className="flex flex-col items-center mb-8 text-center relative pt-4">
-            <button 
-               onClick={() => setShowSettings(true)}
-               className="absolute top-0 right-0 p-3 bg-cream/50 text-navy-dark hover:bg-gold/20 rounded-full transition-all"
-               title="Configuración de Cuenta"
-            >
-               <Settings size={22} className="text-navy-dark" />
-            </button>
+            {isOwnProfile && (
+              <button 
+                 onClick={() => setShowSettings(true)}
+                 className="absolute top-0 right-0 p-3 bg-cream/50 text-navy-dark hover:bg-gold/20 rounded-full transition-all"
+                 title="Configuración de Cuenta"
+              >
+                 <Settings size={22} className="text-navy-dark" />
+              </button>
+            )}
             <div className="relative mb-6">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 border-gold/20 shadow-xl">
                     {avatarUrl ? (
@@ -128,7 +130,9 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
 
         {/* Separator / Title for Muro Personal */}
         <div className="text-center mb-6">
-          <h3 className="font-serif text-2xl font-bold text-navy-dark">Tu Muro Personal</h3>
+          <h3 className="font-serif text-2xl font-bold text-navy-dark">
+            {isOwnProfile ? "Tu Muro Personal" : `Muro de @${profile?.username || "Agente"}`}
+          </h3>
         </div>
       </div>
       
@@ -199,15 +203,17 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
 
             {/* Other details */}
             <div className="bg-cream/40 p-6 rounded-3xl border border-light-gray space-y-6">
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-navy-dark/5 flex items-center justify-center text-navy-dark/40">
-                        <Mail size={20} />
-                    </div>
-                    <div>
-                        <p className="text-xs text-navy-dark/50 font-bold uppercase tracking-wider">Correo Electrónico</p>
-                        <p className="text-navy-dark font-sans font-medium">{profile?.email || "No disponible"}</p>
-                    </div>
-                </div>
+                {isOwnProfile && (
+                  <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-navy-dark/5 flex items-center justify-center text-navy-dark/40">
+                          <Mail size={20} />
+                      </div>
+                      <div>
+                          <p className="text-xs text-navy-dark/50 font-bold uppercase tracking-wider">Correo Electrónico</p>
+                          <p className="text-navy-dark font-sans font-medium">{profile?.email || "No disponible"}</p>
+                      </div>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-xl bg-navy-dark/5 flex items-center justify-center text-navy-dark/40">

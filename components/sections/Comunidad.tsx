@@ -743,18 +743,33 @@ export default function Comunidad({
                   {/* Header */}
                   <div className="px-4 pt-4 pb-3">
                     <div className="flex items-center justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {post.profiles?.avatar_url && !post.is_anonymous
-                            ? <img src={post.profiles.avatar_url} className="w-full h-full object-cover" alt={name} />
-                            : <span className="font-bold text-gold text-sm">{post.is_anonymous ? <Fingerprint size={18} /> : name[0]}</span>
-                          }
+                      {post.is_anonymous || !post.profiles?.username ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {post.profiles?.avatar_url && !post.is_anonymous
+                              ? <img src={post.profiles.avatar_url} className="w-full h-full object-cover" alt={name} />
+                              : <span className="font-bold text-gold text-sm">{post.is_anonymous ? <Fingerprint size={18} /> : name[0]}</span>
+                            }
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-navy-dark leading-none">{name}</p>
+                            <p className="text-[10px] text-navy-dark/40 mt-0.5">{timeAgo(post.created_at)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-sm text-navy-dark leading-none">{name}</p>
-                          <p className="text-[10px] text-navy-dark/40 mt-0.5">{timeAgo(post.created_at)}</p>
-                        </div>
-                      </div>
+                      ) : (
+                        <Link href={`/u/${post.profiles.username}`} className="flex items-center gap-3 group block">
+                          <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0 group-hover:shadow-md group-hover:border-gold/40 transition-all">
+                            {post.profiles?.avatar_url 
+                              ? <img src={post.profiles.avatar_url} className="w-full h-full object-cover" alt={name} />
+                              : <span className="font-bold text-gold text-sm">{name[0]}</span>
+                            }
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-navy-dark leading-none group-hover:text-gold transition-colors">{name}</p>
+                            <p className="text-[10px] text-navy-dark/40 mt-0.5">{timeAgo(post.created_at)}</p>
+                          </div>
+                        </Link>
+                      )}
 
                       {userId === post.author_id && (
                         <div className="relative">
