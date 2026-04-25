@@ -79,7 +79,7 @@ export default function Rachas({
   useEffect(() => {
     if (userId && isAllowedToFetch) {
       supabase.from('profiles').select('points, streak_protectors').eq('id', userId).single()
-        .then(({ data }) => {
+        .then(({ data }: { data: any }) => {
           if (data) {
             setMyPoints(data.points || 0);
             setMyProtectors(data.streak_protectors || 0);
