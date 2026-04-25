@@ -61,6 +61,7 @@ export default function Comunidad({
   communityId?: string; initialTab?: "muro" | "oratorio"; hideTabs?: boolean;
   postId?: string; initialProfile?: any; isAllowedToFetch?: boolean;
   initialPosts?: Post[];
+  authorId?: string;
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,6 +192,8 @@ export default function Comunidad({
 
       if (postId) {
         q = q.eq("id", postId);
+      } else if (authorId) {
+        q = q.eq("author_id", authorId).neq("is_anonymous", true);
       } else {
         if (activeTab === "oratorio") q = q.eq("is_anonymous", true);
         else q = q.neq("is_anonymous", true);
@@ -239,11 +242,11 @@ export default function Comunidad({
       }
       setLoading(false);
     }
-  }, [activeTab, communityId, postId, pageSize, fetchCommentsForPosts]);
+  }, [activeTab, communityId, postId, authorId, pageSize, fetchCommentsForPosts]);
 
   // Realtime Subscriptions — Keep the feed alive
   useEffect(() => {
-    if (!isAllowedToFetch || postId) return;
+    if (!isAllowedToFetch || postId || authorId) return;
 
     const supabase = sbRef.current;
     const channel = supabase
@@ -303,13 +306,13 @@ export default function Comunidad({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isAllowedToFetch, activeTab, communityId, postId]);
+  }, [isAllowedToFetch, activeTab, communityId, postId, authorId]);
 
   // Initial fetch — solo cuando la pestaña está activa; firma estable evita bucles por `[]` nuevo
   useEffect(() => {
     if (!isAllowedToFetch) return;
 
-    const ctx = `${activeTab}|${communityId ?? ""}|${postId ?? ""}|${initialPostsSignature}`;
+    const ctx = `${activeTab}|${communityId ?? ""}|${postId ?? ""}|${authorId ?? ""}|${initialPostsSignature}`;
     if (bootstrapDoneRef.current === ctx) return;
 
     if (fetchCtxRef.current !== ctx) {
@@ -352,6 +355,7 @@ export default function Comunidad({
     activeTab,
     communityId,
     postId,
+    authorId,
     initialPostsSignature,
     fetchCommentsForPosts,
     fetchPosts,

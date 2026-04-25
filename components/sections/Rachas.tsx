@@ -184,7 +184,31 @@ export default function Rachas({
       } else if (diffDays === 1) {
         newDays = myStreak.streak_days + 1;
       } else {
-        newDays = 1;
+        // DiffDays > 1: Falló algunos días. Revisar si hay protectores.
+        try {
+          const { data: profile } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
+          const protectors = profile?.streak_protectors || 0;
+          const daysMissed = diffDays - 1;
+          
+          if (protectors >= daysMissed) {
+            let consumed = 0;
+            for (let i = 0; i < daysMissed; i++) {
+               const { data: ok } = await supabase.rpc('consume_protector', { user_id: userId });
+               if (ok) consumed++;
+            }
+            if (consumed === daysMissed) {
+                newDays = myStreak.streak_days + 1; // Racha salvada
+                setStatusMsg({ message: `Fallaste ${daysMissed} día(s), ¡Pero tu(s) Protector(es) salvaron tu racha! 🛡️🔥`, type: 'success' });
+            } else {
+                newDays = 1;
+            }
+          } else {
+            newDays = 1;
+          }
+        } catch (e) {
+          console.warn("Could not check protectors", e);
+          newDays = 1;
+        }
       }
     }
 
@@ -225,6 +249,11 @@ export default function Rachas({
       }
 
       if (!reqError) {
+        // Otorgar 10 puntos si la racha creció
+        if (newDays > (oldStreak?.streak_days || 0)) {
+            await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 }).catch(() => {});
+        }
+
         // Also automatically share this milestone to the community wall
         try {
           await supabase.from("posts").insert({
@@ -237,7 +266,9 @@ export default function Rachas({
           console.warn("Failed to auto-post mission milestone to wall", e);
         }
 
-        setStatusMsg({ message: "¡Misión registrada con éxito! Tu racha ha subido.", type: 'success' });
+        if (!statusMsg) {
+          setStatusMsg({ message: "¡Misión registrada con éxito! Tu racha ha subido y ganaste 10 🪙.", type: 'success' });
+        }
         await fetchData();
         setMissionNote("");
       } else {

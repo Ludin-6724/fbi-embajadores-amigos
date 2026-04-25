@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame } from "lucide-react";
+import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame, Coins, Store } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Comunidad from "./Comunidad";
 
 export default function ProfileSection({ profile: initialProfile }: { profile: any }) {
   const [profile, setProfile] = useState(initialProfile);
@@ -12,6 +13,8 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [buyingProtector, setBuyingProtector] = useState(false);
+  const [buyMsg, setBuyMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [myStreak, setMyStreak] = useState<{ streak_days: number; max_streak: number } | null>(null);
   
   const supabase = createClient();
@@ -37,6 +40,31 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
+  };
+
+  const handleBuyProtector = async () => {
+    if (buyingProtector || !profile?.id) return;
+    setBuyingProtector(true);
+    setBuyMsg(null);
+    try {
+      const { data, error } = await supabase.rpc('purchase_protector', { user_id: profile.id, cost: 50 });
+      if (error) throw error;
+      if (data) {
+        setProfile((prev: any) => ({
+          ...prev,
+          points: (prev?.points || 0) - 50,
+          streak_protectors: (prev?.streak_protectors || 0) + 1
+        }));
+        setBuyMsg({ text: "¡Protector comprado con éxito! 🛡️", type: "success" });
+      } else {
+        setBuyMsg({ text: "No tienes suficientes puntos 🪙.", type: "error" });
+      }
+    } catch (err: any) {
+      setBuyMsg({ text: `Error: ${err.message}`, type: "error" });
+    } finally {
+      setBuyingProtector(false);
+      setTimeout(() => setBuyMsg(null), 3000);
+    }
   };
 
   const saveUsername = async () => {
@@ -204,6 +232,56 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
                 </div>
             </div>
 
+            {/* Puntos y Protectores */}
+            <div className="bg-cream/40 p-6 rounded-3xl border border-light-gray flex flex-col md:flex-row gap-4 justify-between items-center">
+                <div className="flex flex-1 items-center gap-4 w-full justify-between sm:justify-start">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                        <Coins size={20} />
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-xs text-navy-dark/50 font-bold uppercase tracking-wider">Mis Puntos</p>
+                        <p className="text-navy-dark font-sans font-bold text-xl">{profile?.points || 0} 🪙</p>
+                    </div>
+                </div>
+                <div className="w-px h-10 bg-light-gray hidden md:block"></div>
+                <div className="flex flex-1 items-center gap-4 w-full justify-between sm:justify-start">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
+                        <Shield size={20} />
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-xs text-navy-dark/50 font-bold uppercase tracking-wider">Protectores</p>
+                        <p className="text-navy-dark font-sans font-bold text-xl">{profile?.streak_protectors || 0} 🛡️</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Tienda */}
+            <div className="bg-gold/5 p-6 rounded-3xl border border-gold/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gold text-white flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <Store size={24} />
+                  </div>
+                  <div>
+                      <h4 className="font-serif text-lg font-bold text-navy-dark leading-tight">Tienda de Agente</h4>
+                      <p className="text-xs text-navy-dark/60 font-sans mt-0.5">Canjea tus puntos por recompensas.</p>
+                  </div>
+              </div>
+              <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
+                <button 
+                  onClick={handleBuyProtector}
+                  disabled={buyingProtector || (profile?.points || 0) < 50}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-navy-dark text-white rounded-full font-bold text-xs uppercase tracking-wider hover:bg-gold hover:text-navy-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
+                >
+                  {buyingProtector ? <Loader2 size={16} className="animate-spin" /> : "Comprar Protector (50🪙)"}
+                </button>
+                {buyMsg && (
+                  <p className={`text-[10px] font-bold ${buyMsg.type === 'error' ? 'text-red-500' : 'text-green-600'} text-center w-full`}>
+                    {buyMsg.text}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* Logout Action */}
             <button 
                 onClick={handleLogout}
@@ -213,6 +291,17 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
                 Cerrar Sesión
             </button>
         </div>
+
+        {/* Separator / Title for Muro Personal */}
+        <div className="mt-16 mb-8 text-center max-w-xl mx-auto">
+          <h3 className="font-serif text-3xl font-bold text-navy-dark mb-2">Tu Muro Personal</h3>
+          <p className="font-sans text-sm text-navy-dark/60">Todo lo que publicas aquí se comparte también con la comunidad de embajadores.</p>
+        </div>
+      </div>
+      
+      {/* Muro Personal Component */}
+      <div className="-mx-4 md:mx-0">
+        <Comunidad hideTabs={true} authorId={profile?.id} initialProfile={profile} isAllowedToFetch={true} />
       </div>
     </section>
   );
