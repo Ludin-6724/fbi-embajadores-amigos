@@ -279,7 +279,7 @@ export default function Rachas({
       if (!reqError) {
         // Otorgar 10 puntos si la racha creció (y no fue día repetido)
         if (newDays > (oldStreak?.streak_days || 0)) {
-            await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 }).catch(() => {});
+            await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 });
             setMyPoints((prev: any) => prev + 10);
         }
 
