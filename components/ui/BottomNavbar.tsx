@@ -22,7 +22,7 @@ export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarPro
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/97 backdrop-blur-md border-t border-gold/20 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
       <div className="pb-[env(safe-area-inset-bottom,0px)]">
-        <div className="max-w-4xl mx-auto flex items-center justify-around h-16 px-6">
+        <div className="max-w-4xl mx-auto flex items-center justify-between h-16 px-2 sm:px-6">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -43,7 +43,7 @@ export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarPro
                 onTouchStart={handlePrefetch}
                 aria-label={tab.label}
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 py-1 transition-all min-w-[50px] group",
+                  "flex flex-col items-center justify-center flex-1 py-1 transition-all group",
                   isActive ? "text-gold" : "text-navy-dark/40 hover:text-navy-dark/70"
                 )}
               >
