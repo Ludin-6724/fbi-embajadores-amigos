@@ -233,7 +233,7 @@ export default function Rachas({
             if (consumed === daysMissed) {
                 newDays = myStreak.streak_days + 1; // Racha salvada
                 protectorUsed = true;
-                setMyProtectors(prev => Math.max(0, prev - daysMissed));
+                setMyProtectors((prev: any) => Math.max(0, prev - daysMissed));
                 setStatusMsg({ message: `Fallaste ${daysMissed} día(s), ¡Pero tu(s) Protector(es) salvaron tu racha! 🛡️🔥`, type: 'success' });
             } else {
                 newDays = 1;
@@ -290,7 +290,7 @@ export default function Rachas({
         // Otorgar 10 puntos si la racha creció (y no fue día repetido)
         if (newDays > (oldStreak?.streak_days || 0)) {
             await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 }).catch(() => {});
-            setMyPoints(prev => prev + 10);
+            setMyPoints((prev: any) => prev + 10);
         }
 
         // Solo publicar en el muro si fue un check-in real (NO protector)
@@ -361,8 +361,8 @@ export default function Rachas({
       });
       if (error) throw error;
       if (data) {
-        setMyPoints(prev => prev - pack.cost);
-        setMyProtectors(prev => prev + pack.days);
+        setMyPoints((prev: any) => prev - pack.cost);
+        setMyProtectors((prev: any) => prev + pack.days);
         setStoreMsg({ text: `¡${pack.label} comprado! +${pack.days} protector(es) 🛡️`, type: "success" });
         confetti({
           particleCount: 80,
@@ -384,7 +384,7 @@ export default function Rachas({
     if (!userId || cheeringId || cheeredIds.has(target.user_id) || target.user_id === userId) return;
 
     // 1. Optimistic feedback: Confetti first!
-    setCheeredIds(prev => new Set(prev).add(target.user_id));
+    setCheeredIds((prev: any) => new Set(prev).add(target.user_id));
     confetti({
       particleCount: 120,
       spread: 70,
