@@ -12,10 +12,10 @@ interface BottomNavbarProps {
 
 export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarProps) {
   const tabs = [
-    { id: "shop" as TabType, icon: Store, label: "Tienda" },
+    { id: "feed" as TabType, icon: Home, label: "Muro" },
     { id: "prayers" as TabType, icon: Heart, label: "Oración" },
-    { id: "feed" as TabType, icon: Home, label: "Muro", isCenter: true },
     { id: "streaks" as TabType, icon: Flame, label: "Rachas" },
+    { id: "shop" as TabType, icon: Store, label: "Tienda" },
     { id: "profile" as TabType, icon: User, label: "Perfil" },
   ];
 
@@ -33,23 +33,7 @@ export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarPro
               }
             };
 
-            if (tab.isCenter) {
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => onTabChange(tab.id)}
-                  onMouseEnter={handlePrefetch}
-                  onTouchStart={handlePrefetch}
-                  className="relative -top-4 flex flex-col items-center justify-center min-w-[64px] group"
-                  aria-label={tab.label}
-                >
-                  <div className="w-14 h-14 bg-navy-dark group-hover:bg-gold rounded-full flex items-center justify-center shadow-xl transform active:scale-95 transition-all border-4 border-white">
-                    <Icon size={28} className="text-white" />
-                  </div>
-                  <span className="text-[10px] font-bold text-navy-dark mt-1">{tab.label}</span>
-                </button>
-              );
-            }
+
 
             return (
               <button
