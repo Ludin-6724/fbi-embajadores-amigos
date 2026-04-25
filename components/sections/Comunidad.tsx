@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X } from "lucide-react";
+import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X, Flame } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
 import Link from "next/link";
