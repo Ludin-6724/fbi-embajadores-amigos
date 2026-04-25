@@ -30,7 +30,7 @@ export default function HomeClient({ initialUser, initialProfile, initialPosts =
   }, []);
 
   const handleTabChange = (tab: TabType) => {
-    if (tab === "publish") {
+    if ((tab as string) === "publish") {
         window.dispatchEvent(new CustomEvent("fbi:open-publish-selector"));
         return;
     }
