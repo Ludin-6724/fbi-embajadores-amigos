@@ -15,8 +15,8 @@ BEGIN
 END;
 $$;
 
--- RPC para comprar un protector
-CREATE OR REPLACE FUNCTION purchase_protector(user_id uuid, cost int)
+-- RPC para comprar protectores (packs de 1, 2, o 3 días)
+CREATE OR REPLACE FUNCTION purchase_protector(user_id uuid, cost int, days_count int DEFAULT 1)
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -30,7 +30,7 @@ BEGIN
     UPDATE public.profiles 
     SET 
       points = current_points - cost,
-      streak_protectors = COALESCE(streak_protectors, 0) + 1
+      streak_protectors = COALESCE(streak_protectors, 0) + days_count
     WHERE id = user_id;
     RETURN true;
   ELSE

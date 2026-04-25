@@ -13,8 +13,6 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [buyingProtector, setBuyingProtector] = useState(false);
-  const [buyMsg, setBuyMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [myStreak, setMyStreak] = useState<{ streak_days: number; max_streak: number } | null>(null);
   
   const supabase = createClient();
@@ -42,30 +40,6 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
     router.refresh();
   };
 
-  const handleBuyProtector = async () => {
-    if (buyingProtector || !profile?.id) return;
-    setBuyingProtector(true);
-    setBuyMsg(null);
-    try {
-      const { data, error } = await supabase.rpc('purchase_protector', { user_id: profile.id, cost: 50 });
-      if (error) throw error;
-      if (data) {
-        setProfile((prev: any) => ({
-          ...prev,
-          points: (prev?.points || 0) - 50,
-          streak_protectors: (prev?.streak_protectors || 0) + 1
-        }));
-        setBuyMsg({ text: "¡Protector comprado con éxito! 🛡️", type: "success" });
-      } else {
-        setBuyMsg({ text: "No tienes suficientes puntos 🪙.", type: "error" });
-      }
-    } catch (err: any) {
-      setBuyMsg({ text: `Error: ${err.message}`, type: "error" });
-    } finally {
-      setBuyingProtector(false);
-      setTimeout(() => setBuyMsg(null), 3000);
-    }
-  };
 
   const saveUsername = async () => {
     const trimmed = newUsername.trim();
@@ -255,32 +229,25 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
                 </div>
             </div>
 
-            {/* Tienda */}
-            <div className="bg-gold/5 p-6 rounded-3xl border border-gold/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Tienda — redirigir a Rachas */}
+            <button 
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("fbi:change-tab", { detail: "streaks" }));
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="w-full bg-gold/5 p-5 rounded-3xl border border-gold/20 flex items-center justify-between gap-4 hover:bg-gold/10 transition-all group cursor-pointer"
+            >
               <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gold text-white flex items-center justify-center flex-shrink-0 shadow-lg">
-                      <Store size={24} />
+                  <div className="w-11 h-11 rounded-xl bg-gold text-white flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <Store size={22} />
                   </div>
-                  <div>
-                      <h4 className="font-serif text-lg font-bold text-navy-dark leading-tight">Tienda de Agente</h4>
-                      <p className="text-xs text-navy-dark/60 font-sans mt-0.5">Canjea tus puntos por recompensas.</p>
+                  <div className="text-left">
+                      <h4 className="font-serif text-base font-bold text-navy-dark leading-tight">Tienda de Agente</h4>
+                      <p className="text-xs text-navy-dark/60 font-sans mt-0.5">Ve a Rachas para canjear tus puntos por protectores</p>
                   </div>
               </div>
-              <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
-                <button 
-                  onClick={handleBuyProtector}
-                  disabled={buyingProtector || (profile?.points || 0) < 50}
-                  className="w-full sm:w-auto px-6 py-2.5 bg-navy-dark text-white rounded-full font-bold text-xs uppercase tracking-wider hover:bg-gold hover:text-navy-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
-                >
-                  {buyingProtector ? <Loader2 size={16} className="animate-spin" /> : "Comprar Protector (50🪙)"}
-                </button>
-                {buyMsg && (
-                  <p className={`text-[10px] font-bold ${buyMsg.type === 'error' ? 'text-red-500' : 'text-green-600'} text-center w-full`}>
-                    {buyMsg.text}
-                  </p>
-                )}
-              </div>
-            </div>
+              <span className="text-gold font-bold text-sm group-hover:translate-x-1 transition-transform">→</span>
+            </button>
 
             {/* Logout Action */}
             <button 

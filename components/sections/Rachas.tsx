@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Flame, Trophy, CheckCircle, Loader2, Target, PenTool } from "lucide-react";
+import { Flame, Trophy, CheckCircle, Loader2, Target, PenTool, Shield, Coins, Store, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import confetti from "canvas-confetti";
 import { cache } from "@/lib/utils/cache";
@@ -19,6 +19,12 @@ type Streak = {
     avatar_url: string | null;
   } | null;
 };
+
+const PROTECTOR_PACKS = [
+  { days: 1, cost: 50,  label: "Escudo Básico",   emoji: "🛡️", desc: "Protege 1 día de ausencia" },
+  { days: 2, cost: 120, label: "Escudo Doble",     emoji: "⚔️", desc: "Protege 2 días consecutivos" },
+  { days: 3, cost: 300, label: "Escudo Legendario", emoji: "🏰", desc: "Protege 3 días — Máxima seguridad" },
+];
 
 export default function Rachas({ 
   communityId,
@@ -38,6 +44,12 @@ export default function Rachas({
   const [error, setError] = useState<string | null>(null);
   const [cheeringId, setCheeringId] = useState<string | null>(null);
   const [cheeredIds, setCheeredIds] = useState<Set<string>>(new Set());
+
+  // Points & Store
+  const [myPoints, setMyPoints] = useState(profile?.points || 0);
+  const [myProtectors, setMyProtectors] = useState(profile?.streak_protectors || 0);
+  const [buyingPack, setBuyingPack] = useState<number | null>(null);
+  const [storeMsg, setStoreMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Form state
   const [missionNote, setMissionNote] = useState("");
@@ -63,12 +75,32 @@ export default function Rachas({
     }
   }, [communityId, isAllowedToFetch]);
 
+  // Load points from profile
+  useEffect(() => {
+    if (userId && isAllowedToFetch) {
+      supabase.from('profiles').select('points, streak_protectors').eq('id', userId).single()
+        .then(({ data }) => {
+          if (data) {
+            setMyPoints(data.points || 0);
+            setMyProtectors(data.streak_protectors || 0);
+          }
+        });
+    }
+  }, [userId, isAllowedToFetch]);
+
   useEffect(() => {
     if (statusMsg) {
       const timer = setTimeout(() => setStatusMsg(null), 4000);
       return () => clearTimeout(timer);
     }
   }, [statusMsg]);
+
+  useEffect(() => {
+    if (storeMsg) {
+      const timer = setTimeout(() => setStoreMsg(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [storeMsg]);
 
   const fetchData = async () => {
     if (topStreaks.length === 0) setLoading(true);
@@ -170,6 +202,8 @@ export default function Rachas({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     let newDays = 1;
+    let protectorUsed = false;
+    let daysMissed = 0;
 
     if (myStreak && myStreak.last_checkin) {
       const last = new Date(myStreak.last_checkin);
@@ -185,10 +219,10 @@ export default function Rachas({
         newDays = myStreak.streak_days + 1;
       } else {
         // DiffDays > 1: Falló algunos días. Revisar si hay protectores.
+        daysMissed = diffDays - 1;
         try {
-          const { data: profile } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
-          const protectors = profile?.streak_protectors || 0;
-          const daysMissed = diffDays - 1;
+          const { data: profileData } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
+          const protectors = profileData?.streak_protectors || 0;
           
           if (protectors >= daysMissed) {
             let consumed = 0;
@@ -198,12 +232,16 @@ export default function Rachas({
             }
             if (consumed === daysMissed) {
                 newDays = myStreak.streak_days + 1; // Racha salvada
+                protectorUsed = true;
+                setMyProtectors(prev => Math.max(0, prev - daysMissed));
                 setStatusMsg({ message: `Fallaste ${daysMissed} día(s), ¡Pero tu(s) Protector(es) salvaron tu racha! 🛡️🔥`, type: 'success' });
             } else {
                 newDays = 1;
+                setStatusMsg({ message: `Tu racha se reinició. No tenías suficientes protectores. ¡Vamos de nuevo! 💪`, type: 'error' });
             }
           } else {
             newDays = 1;
+            setStatusMsg({ message: `Perdiste ${daysMissed} día(s) sin registrar. Tu racha se reinició a 1. ¡Vamos de nuevo! 💪`, type: 'error' });
           }
         } catch (e) {
           console.warn("Could not check protectors", e);
@@ -249,21 +287,39 @@ export default function Rachas({
       }
 
       if (!reqError) {
-        // Otorgar 10 puntos si la racha creció
+        // Otorgar 10 puntos si la racha creció (y no fue día repetido)
         if (newDays > (oldStreak?.streak_days || 0)) {
             await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 }).catch(() => {});
+            setMyPoints(prev => prev + 10);
         }
 
-        // Also automatically share this milestone to the community wall
-        try {
-          await supabase.from("posts").insert({
-            author_id: userId,
-            content: `🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${newDays} días (Récord: ${newMaxStreak} días) 🔥\n\n"${missionNote.trim()}"`,
-            is_anonymous: false,
-            community_id: communityId || null
-          });
-        } catch (e) {
-          console.warn("Failed to auto-post mission milestone to wall", e);
+        // Solo publicar en el muro si fue un check-in real (NO protector)
+        if (!protectorUsed) {
+          try {
+            await supabase.from("posts").insert({
+              author_id: userId,
+              content: `🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${newDays} días (Récord: ${newMaxStreak} días) 🔥\n\n"${missionNote.trim()}"`,
+              is_anonymous: false,
+              community_id: communityId || null
+            });
+          } catch (e) {
+            console.warn("Failed to auto-post mission milestone to wall", e);
+          }
+        }
+
+        // Si se usó un protector, enviar notificación
+        if (protectorUsed) {
+          try {
+            await supabase.from("notifications").insert({
+              user_id: userId,
+              actor_id: userId,
+              type: "protector_used",
+              message: `🛡️ Tu protector salvó tu racha de ${newDays - 1} días. Cubrió ${daysMissed} día(s) de ausencia. ¡Sigue sin fallar!`,
+              link: "#rachas"
+            });
+          } catch (e) {
+            console.warn("Notification for protector use failed", e);
+          }
         }
 
         if (!statusMsg) {
@@ -290,6 +346,38 @@ export default function Rachas({
     return last.getDate() === today.getDate() && 
            last.getMonth() === today.getMonth() && 
            last.getFullYear() === today.getFullYear();
+  };
+
+  const handleBuyPack = async (pack: typeof PROTECTOR_PACKS[0]) => {
+    if (!userId || buyingPack !== null) return;
+    setBuyingPack(pack.days);
+    setStoreMsg(null);
+
+    try {
+      const { data, error } = await supabase.rpc('purchase_protector', { 
+        user_id: userId, 
+        cost: pack.cost, 
+        days_count: pack.days 
+      });
+      if (error) throw error;
+      if (data) {
+        setMyPoints(prev => prev - pack.cost);
+        setMyProtectors(prev => prev + pack.days);
+        setStoreMsg({ text: `¡${pack.label} comprado! +${pack.days} protector(es) 🛡️`, type: "success" });
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.7 },
+          colors: ['#D4A017', '#4F46E5', '#10B981']
+        });
+      } else {
+        setStoreMsg({ text: "No tienes suficientes puntos 🪙. ¡Sigue con tu racha!", type: "error" });
+      }
+    } catch (err: any) {
+      setStoreMsg({ text: `Error: ${err.message}`, type: "error" });
+    } finally {
+      setBuyingPack(null);
+    }
   };
 
   const handleCheer = async (target: Streak) => {
@@ -366,6 +454,138 @@ export default function Rachas({
       <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[600px] h-[600px] bg-gold/5 blur-[120px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto px-4 md:px-8 relative z-10">
+
+        {/* ── Puntos y Protectores ─────────────────────────────── */}
+        {userId && (
+          <div className="max-w-4xl mx-auto mb-12">
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              {/* Puntos */}
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-2xl p-5 border border-amber-200/50 relative overflow-hidden group hover:shadow-md transition-all">
+                <div className="absolute -top-4 -right-4 w-20 h-20 bg-amber-300/10 rounded-full blur-lg group-hover:bg-amber-300/20 transition-all" />
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center">
+                    <Coins size={22} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-amber-800/60 font-bold uppercase tracking-widest">Mis Puntos</p>
+                    <p className="text-2xl font-black text-amber-700 font-sans leading-none">{myPoints}</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-amber-700/50 font-sans font-medium">+10 🪙 por cada día de racha</p>
+              </div>
+
+              {/* Protectores */}
+              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 rounded-2xl p-5 border border-indigo-200/50 relative overflow-hidden group hover:shadow-md transition-all">
+                <div className="absolute -top-4 -right-4 w-20 h-20 bg-indigo-300/10 rounded-full blur-lg group-hover:bg-indigo-300/20 transition-all" />
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center">
+                    <Shield size={22} className="text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-indigo-800/60 font-bold uppercase tracking-widest">Protectores</p>
+                    <p className="text-2xl font-black text-indigo-700 font-sans leading-none">{myProtectors}</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-indigo-700/50 font-sans font-medium">Salvan tu racha si faltas</p>
+              </div>
+            </div>
+
+            {/* ── Tienda de Agente ─────────────────────────────── */}
+            <div className="bg-gradient-to-br from-navy-dark to-[#1a2744] rounded-3xl p-6 md:p-8 shadow-xl border border-gold/10 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-gold/5 rounded-bl-full pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-gold/3 rounded-tr-full pointer-events-none" />
+              
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-11 h-11 rounded-xl bg-gold/20 flex items-center justify-center">
+                  <Store size={22} className="text-gold" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-white flex items-center gap-2">
+                    Tienda de Agente
+                    <Sparkles size={16} className="text-gold" />
+                  </h3>
+                  <p className="text-[11px] text-white/40 font-sans">Canjea tus puntos por protectores de racha</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {PROTECTOR_PACKS.map((pack) => {
+                  const canAfford = myPoints >= pack.cost;
+                  const isBuying = buyingPack === pack.days;
+                  const isLegendary = pack.days === 3;
+                  
+                  return (
+                    <div
+                      key={pack.days}
+                      className={`rounded-2xl p-4 border transition-all relative overflow-hidden ${
+                        isLegendary 
+                          ? "bg-gradient-to-b from-gold/20 to-gold/5 border-gold/40 shadow-[0_0_20px_rgba(212,175,55,0.15)]" 
+                          : "bg-white/5 border-white/10 hover:border-white/20"
+                      }`}
+                    >
+                      {isLegendary && (
+                        <div className="absolute top-2 right-2">
+                          <span className="text-[8px] font-black uppercase tracking-widest bg-gold text-navy-dark px-2 py-0.5 rounded-full">
+                            Premium
+                          </span>
+                        </div>
+                      )}
+                      
+                      <div className="text-center mb-3">
+                        <span className="text-3xl block mb-1">{pack.emoji}</span>
+                        <h4 className={`font-serif font-bold text-sm ${isLegendary ? 'text-gold' : 'text-white'}`}>
+                          {pack.label}
+                        </h4>
+                        <p className="text-[10px] text-white/40 font-sans mt-0.5">{pack.desc}</p>
+                      </div>
+
+                      <div className="text-center mb-3">
+                        <span className={`text-lg font-black font-sans ${isLegendary ? 'text-gold' : 'text-amber-400'}`}>
+                          {pack.cost}
+                        </span>
+                        <span className="text-xs text-white/40 ml-1">🪙</span>
+                      </div>
+
+                      <button
+                        onClick={() => handleBuyPack(pack)}
+                        disabled={!canAfford || isBuying}
+                        className={`w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                          isLegendary
+                            ? canAfford 
+                              ? "bg-gold text-navy-dark hover:bg-gold/90 shadow-md active:scale-95" 
+                              : "bg-gold/20 text-gold/40 cursor-not-allowed"
+                            : canAfford
+                              ? "bg-white/10 text-white hover:bg-white/20 active:scale-95 border border-white/10"
+                              : "bg-white/5 text-white/20 cursor-not-allowed"
+                        }`}
+                      >
+                        {isBuying ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : canAfford ? (
+                          "Comprar"
+                        ) : (
+                          "Sin fondos"
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {storeMsg && (
+                <div className={`mt-4 p-3 rounded-xl text-xs font-bold text-center border ${
+                  storeMsg.type === 'error' 
+                    ? 'bg-red-500/10 border-red-500/20 text-red-300' 
+                    : 'bg-green-500/10 border-green-500/20 text-green-300'
+                }`}>
+                  {storeMsg.text}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tu Llama & Misión ────────────────────────────────── */}
         <div className="flex flex-col md:flex-row items-start lg:items-center gap-16 lg:gap-24 mb-16">
           <div className="flex-1">
              <span className="text-sm font-sans font-bold text-gold uppercase tracking-wider mb-4 inline-block flex items-center gap-2">
@@ -461,6 +681,7 @@ export default function Rachas({
           </div>
         </div>
 
+        {/* ── Leaderboard ──────────────────────────────────────── */}
         <div className="max-w-4xl mx-auto bg-white border border-light-gray rounded-3xl p-6 md:p-12 shadow-sm">
           <div className="flex items-center justify-between mb-8 pb-4 border-b border-light-gray">
             <h3 className="text-2xl font-serif font-semibold text-navy-dark flex items-center gap-2">
