@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame, Coins, Store, Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -142,9 +143,9 @@ export default function ProfileSection({ profile: initialProfile, isOwnProfile =
       </div>
 
       {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 bg-navy-dark/40 backdrop-blur-sm animate-fade-in">
-           <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up flex flex-col max-h-[90vh]">
+      {showSettings && typeof window !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-4 bg-navy-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-12 fade-in duration-300 flex flex-col max-h-[90vh]">
               <div className="p-4 flex justify-between items-center bg-cream/30 border-b border-light-gray sticky top-0 z-10">
                  <h3 className="font-serif font-bold text-xl text-navy-dark flex items-center gap-2 px-2">
                     <Settings size={20} className="text-gold" /> Configuración General
@@ -297,7 +298,8 @@ export default function ProfileSection({ profile: initialProfile, isOwnProfile =
         </div>
 
            </div>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   );
