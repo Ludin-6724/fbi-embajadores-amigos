@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Flame, Trophy, CheckCircle, Loader2, Target, PenTool, Shield, Coins, Store, Sparkles } from "lucide-react";
+import { Flame, Trophy, CheckCircle, Loader2, Target, PenTool, Shield, Coins, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import confetti from "canvas-confetti";
 import { cache } from "@/lib/utils/cache";
@@ -20,11 +20,7 @@ type Streak = {
   } | null;
 };
 
-const PROTECTOR_PACKS = [
-  { days: 1, cost: 50,  label: "Escudo Básico",   emoji: "🛡️", desc: "Protege 1 día de ausencia" },
-  { days: 2, cost: 120, label: "Escudo Doble",     emoji: "⚔️", desc: "Protege 2 días consecutivos" },
-  { days: 3, cost: 300, label: "Escudo Legendario", emoji: "🏰", desc: "Protege 3 días — Máxima seguridad" },
-];
+
 
 export default function Rachas({ 
   communityId,
@@ -48,8 +44,7 @@ export default function Rachas({
   // Points & Store
   const [myPoints, setMyPoints] = useState(profile?.points || 0);
   const [myProtectors, setMyProtectors] = useState(profile?.streak_protectors || 0);
-  const [buyingPack, setBuyingPack] = useState<number | null>(null);
-  const [storeMsg, setStoreMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
 
   // Form state
   const [missionNote, setMissionNote] = useState("");
@@ -95,12 +90,7 @@ export default function Rachas({
     }
   }, [statusMsg]);
 
-  useEffect(() => {
-    if (storeMsg) {
-      const timer = setTimeout(() => setStoreMsg(null), 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [storeMsg]);
+
 
   const fetchData = async () => {
     if (topStreaks.length === 0) setLoading(true);
@@ -348,37 +338,7 @@ export default function Rachas({
            last.getFullYear() === today.getFullYear();
   };
 
-  const handleBuyPack = async (pack: typeof PROTECTOR_PACKS[0]) => {
-    if (!userId || buyingPack !== null) return;
-    setBuyingPack(pack.days);
-    setStoreMsg(null);
 
-    try {
-      const { data, error } = await supabase.rpc('purchase_protector', { 
-        user_id: userId, 
-        cost: pack.cost, 
-        days_count: pack.days 
-      });
-      if (error) throw error;
-      if (data) {
-        setMyPoints((prev: any) => prev - pack.cost);
-        setMyProtectors((prev: any) => prev + pack.days);
-        setStoreMsg({ text: `¡${pack.label} comprado! +${pack.days} protector(es) 🛡️`, type: "success" });
-        confetti({
-          particleCount: 80,
-          spread: 60,
-          origin: { y: 0.7 },
-          colors: ['#D4A017', '#4F46E5', '#10B981']
-        });
-      } else {
-        setStoreMsg({ text: "No tienes suficientes puntos 🪙. ¡Sigue con tu racha!", type: "error" });
-      }
-    } catch (err: any) {
-      setStoreMsg({ text: `Error: ${err.message}`, type: "error" });
-    } finally {
-      setBuyingPack(null);
-    }
-  };
 
   const handleCheer = async (target: Streak) => {
     if (!userId || cheeringId || cheeredIds.has(target.user_id) || target.user_id === userId) return;
@@ -491,96 +451,43 @@ export default function Rachas({
             </div>
 
             {/* ── Tienda de Agente ─────────────────────────────── */}
-            <div className="bg-gradient-to-br from-navy-dark to-[#1a2744] rounded-3xl p-6 md:p-8 shadow-xl border border-gold/10 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-gold/5 rounded-bl-full pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-gold/3 rounded-tr-full pointer-events-none" />
-              
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-11 h-11 rounded-xl bg-gold/20 flex items-center justify-center">
-                  <Store size={22} className="text-gold" />
-                </div>
-                <div>
-                  <h3 className="font-serif text-xl font-bold text-white flex items-center gap-2">
-                    Tienda de Agente
-                    <Sparkles size={16} className="text-gold" />
-                  </h3>
-                  <p className="text-[11px] text-white/40 font-sans">Canjea tus puntos por protectores de racha</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {PROTECTOR_PACKS.map((pack) => {
-                  const canAfford = myPoints >= pack.cost;
-                  const isBuying = buyingPack === pack.days;
-                  const isLegendary = pack.days === 3;
-                  
-                  return (
-                    <div
-                      key={pack.days}
-                      className={`rounded-2xl p-4 border transition-all relative overflow-hidden ${
-                        isLegendary 
-                          ? "bg-gradient-to-b from-gold/20 to-gold/5 border-gold/40 shadow-[0_0_20px_rgba(212,175,55,0.15)]" 
-                          : "bg-white/5 border-white/10 hover:border-white/20"
-                      }`}
-                    >
-                      {isLegendary && (
-                        <div className="absolute top-2 right-2">
-                          <span className="text-[8px] font-black uppercase tracking-widest bg-gold text-navy-dark px-2 py-0.5 rounded-full">
-                            Premium
-                          </span>
-                        </div>
-                      )}
-                      
-                      <div className="text-center mb-3">
-                        <span className="text-3xl block mb-1">{pack.emoji}</span>
-                        <h4 className={`font-serif font-bold text-sm ${isLegendary ? 'text-gold' : 'text-white'}`}>
-                          {pack.label}
-                        </h4>
-                        <p className="text-[10px] text-white/40 font-sans mt-0.5">{pack.desc}</p>
-                      </div>
-
-                      <div className="text-center mb-3">
-                        <span className={`text-lg font-black font-sans ${isLegendary ? 'text-gold' : 'text-amber-400'}`}>
-                          {pack.cost}
-                        </span>
-                        <span className="text-xs text-white/40 ml-1">🪙</span>
-                      </div>
-
-                      <button
-                        onClick={() => handleBuyPack(pack)}
-                        disabled={!canAfford || isBuying}
-                        className={`w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                          isLegendary
-                            ? canAfford 
-                              ? "bg-gold text-navy-dark hover:bg-gold/90 shadow-md active:scale-95" 
-                              : "bg-gold/20 text-gold/40 cursor-not-allowed"
-                            : canAfford
-                              ? "bg-white/10 text-white hover:bg-white/20 active:scale-95 border border-white/10"
-                              : "bg-white/5 text-white/20 cursor-not-allowed"
-                        }`}
-                      >
-                        {isBuying ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : canAfford ? (
-                          "Comprar"
-                        ) : (
-                          "Sin fondos"
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {storeMsg && (
-                <div className={`mt-4 p-3 rounded-xl text-xs font-bold text-center border ${
-                  storeMsg.type === 'error' 
-                    ? 'bg-red-500/10 border-red-500/20 text-red-300' 
-                    : 'bg-green-500/10 border-green-500/20 text-green-300'
+            {/* ── Estado de Protección ─────────────────────────────── */}
+            <div className={`rounded-3xl p-6 md:p-8 shadow-sm border relative overflow-hidden ${
+              myProtectors > 0 
+                ? "bg-green-50/50 border-green-200" 
+                : "bg-red-50/50 border-red-100"
+            }`}>
+              <div className="flex flex-col md:flex-row items-center gap-6">
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                  myProtectors > 0 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"
                 }`}>
-                  {storeMsg.text}
+                  <Shield size={32} />
                 </div>
-              )}
+                <div className="flex-1 text-center md:text-left">
+                  <h3 className={`font-serif text-2xl font-bold mb-2 ${
+                    myProtectors > 0 ? "text-green-800" : "text-red-800"
+                  }`}>
+                    {myProtectors > 0 ? "¡Tu racha está Asegurada! 🛡️" : "Tu racha está Vulnerable ⚠️"}
+                  </h3>
+                  <p className="text-sm font-sans text-navy-dark/70 leading-relaxed max-w-2xl">
+                    {myProtectors > 0 
+                      ? "Tienes escudos activos. Si olvidas reportar tu misión un día, el sistema consumirá un escudo automáticamente para salvar tu Llama y que no vuelva a cero. ¡Pero intenta no faltar!" 
+                      : "No tienes escudos. Si finaliza el día sin registrar tu misión diaria, tu Llama volverá a cero. Ve a la Tienda para canjear tus puntos por escudos."
+                    }
+                  </p>
+                </div>
+                {myProtectors === 0 && (
+                  <button
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("fbi:change-tab", { detail: "shop" }));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="px-6 py-3 bg-navy-dark text-white font-bold rounded-full text-sm hover:bg-gold hover:text-navy-dark transition-all shadow-md active:scale-95 whitespace-nowrap"
+                  >
+                    Ir a la Tienda
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

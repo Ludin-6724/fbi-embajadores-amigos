@@ -1,9 +1,9 @@
 "use client";
 
-import { Home, Heart, PlusCircle, Flame, User } from "lucide-react";
+import { Home, Heart, PlusCircle, Flame, User, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TabType = "feed" | "prayers" | "publish" | "streaks" | "groups" | "profile";
+export type TabType = "feed" | "prayers" | "shop" | "streaks" | "groups" | "profile";
 
 interface BottomNavbarProps {
   activeTab: TabType;
@@ -14,7 +14,7 @@ export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarPro
   const tabs = [
     { id: "feed" as TabType, icon: Home, label: "Muro" },
     { id: "prayers" as TabType, icon: Heart, label: "Oración" },
-    { id: "publish" as TabType, icon: PlusCircle, label: "Publicar", isCenter: true },
+    { id: "shop" as TabType, icon: Store, label: "Tienda", isCenter: true },
     { id: "streaks" as TabType, icon: Flame, label: "Rachas" },
     { id: "profile" as TabType, icon: User, label: "Perfil" },
   ];

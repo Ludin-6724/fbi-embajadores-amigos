@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Hero from "@/components/sections/Hero";
 import Comunidad from "@/components/sections/Comunidad";
 import Rachas from "@/components/sections/Rachas";
+import Tienda from "@/components/sections/Tienda";
 import DashboardActions from "@/components/sections/DashboardActions";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
@@ -21,7 +22,7 @@ export default function HomeClient({ initialUser, initialProfile, initialPosts =
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as TabType;
-    const validTabs: TabType[] = ["feed", "prayers", "streaks", "profile"];
+    const validTabs: TabType[] = ["feed", "prayers", "streaks", "shop", "profile"];
     if (hash && validTabs.includes(hash)) {
       setActiveTab(hash);
       setVisitedTabs(prev => new Set([...prev, hash]));
@@ -107,6 +108,10 @@ export default function HomeClient({ initialUser, initialProfile, initialPosts =
 
         <div style={{ display: activeTab === "streaks" ? "block" : "none" }}>
           <Rachas profile={initialProfile} isAllowedToFetch={visitedTabs.has("streaks") && activeTab === "streaks"} />
+        </div>
+
+        <div style={{ display: activeTab === "shop" ? "block" : "none" }}>
+          <Tienda profile={initialProfile} isAllowedToFetch={visitedTabs.has("shop") && activeTab === "shop"} />
         </div>
 
         <div style={{ display: activeTab === "profile" ? "block" : "none" }}>
