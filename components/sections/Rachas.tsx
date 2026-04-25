@@ -384,7 +384,7 @@ export default function Rachas({
     if (!userId || cheeringId || cheeredIds.has(target.user_id) || target.user_id === userId) return;
 
     // 1. Optimistic feedback: Confetti first!
-    setCheeredIds((prev: any) => new Set(prev).add(target.user_id));
+    setCheeredIds((prev: Set<string>) => new Set(prev).add(target.user_id));
     confetti({
       particleCount: 120,
       spread: 70,
