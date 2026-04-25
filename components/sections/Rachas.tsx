@@ -55,7 +55,7 @@ export default function Rachas({
     if (isAllowedToFetch) {
       // 1. Try to load from Cache first
       const { data: cachedStreaks } = cache.peekStale<Streak[]>(`streaks_${communityId || 'global'}`);
-      const { data: cachedMyStreak } = cache.peekStale<Streak>(`my_streak_${communityId || 'global'}`);
+      const { data: cachedMyStreak } = userId ? cache.peekStale<Streak>(`my_streak_${userId}_${communityId || 'global'}`) : { data: null };
       
       if (cachedStreaks?.length) {
         setTopStreaks(cachedStreaks);
@@ -131,13 +131,13 @@ export default function Rachas({
         const mine = (data as any)?.find((s: any) => s.user_id === userId);
         if (mine) {
           setMyStreak(mine);
-          cache.set(`my_streak_${communityId || 'global'}`, mine);
+          cache.set(`my_streak_${userId}_${communityId || 'global'}`, mine);
         }
         else {
           supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle().then(({ data: myD }: { data: any; error: any }) => {
             if (myD) {
               setMyStreak(myD as any);
-              cache.set(`my_streak_${communityId || 'global'}`, myD as any);
+              cache.set(`my_streak_${userId}_${communityId || 'global'}`, myD as any);
             }
           });
         }
@@ -176,7 +176,10 @@ export default function Rachas({
         if (communityId) fallbackQ = fallbackQ.eq("community_id", communityId);
         else fallbackQ = fallbackQ.is("community_id", null);
         fallbackQ.maybeSingle().then(({ data: fb }: { data: any; error: any }) => {
-          if (fb) setMyStreak(fb as unknown as Streak);
+          if (fb) {
+            setMyStreak(fb as unknown as Streak);
+            cache.set(`my_streak_${uId}_${communityId || 'global'}`, fb as unknown as Streak);
+          }
         });
       }
     });
