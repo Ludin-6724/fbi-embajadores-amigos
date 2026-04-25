@@ -141,7 +141,7 @@ export default function Comunidad({
   useEffect(() => {
     if (showPostSheet && userId) {
       setCheckingStreak(true);
-      sbRef.current.from("streaks").select("last_checkin").eq("user_id", userId).is("community_id", communityId || null).maybeSingle().then(({data}) => {
+      sbRef.current.from("streaks").select("last_checkin").eq("user_id", userId).is("community_id", communityId || null).maybeSingle().then(({data}: {data: any}) => {
         if (data && data.last_checkin) {
            const today = new Date();
            today.setHours(0,0,0,0);
