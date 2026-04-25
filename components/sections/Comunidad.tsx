@@ -56,7 +56,7 @@ function findRootParentId(commentId: string, allComments: CommentPreview[]): str
 
 export default function Comunidad({
   communityId, initialTab = "muro", hideTabs = false,
-  postId, initialProfile, isAllowedToFetch = true, initialPosts = EMPTY_INITIAL_POSTS
+  postId, initialProfile, isAllowedToFetch = true, initialPosts = EMPTY_INITIAL_POSTS, authorId
 }: {
   communityId?: string; initialTab?: "muro" | "oratorio"; hideTabs?: boolean;
   postId?: string; initialProfile?: any; isAllowedToFetch?: boolean;
