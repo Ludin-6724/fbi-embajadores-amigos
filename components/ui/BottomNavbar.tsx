@@ -12,9 +12,9 @@ interface BottomNavbarProps {
 
 export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarProps) {
   const tabs = [
-    { id: "feed" as TabType, icon: Home, label: "Muro" },
+    { id: "shop" as TabType, icon: Store, label: "Tienda" },
     { id: "prayers" as TabType, icon: Heart, label: "Oración" },
-    { id: "shop" as TabType, icon: Store, label: "Tienda", isCenter: true },
+    { id: "feed" as TabType, icon: Home, label: "Muro", isCenter: true },
     { id: "streaks" as TabType, icon: Flame, label: "Rachas" },
     { id: "profile" as TabType, icon: User, label: "Perfil" },
   ];

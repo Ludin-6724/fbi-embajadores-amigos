@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame, Coins, Store } from "lucide-react";
+import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame, Coins, Store, Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Comunidad from "./Comunidad";
@@ -14,6 +14,7 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [myStreak, setMyStreak] = useState<{ streak_days: number; max_streak: number } | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   
   const supabase = createClient();
   const router = useRouter();
@@ -98,9 +99,16 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
     <section className="py-12 bg-white min-h-[80vh]">
       <div className="container mx-auto px-4 max-w-2xl">
         {/* Header / Avatar */}
-        <div className="flex flex-col items-center mb-10 text-center">
+        <div className="flex flex-col items-center mb-8 text-center relative pt-4">
+            <button 
+               onClick={() => setShowSettings(true)}
+               className="absolute top-0 right-0 p-3 bg-cream/50 text-navy-dark hover:bg-gold/20 rounded-full transition-all"
+               title="Configuración de Cuenta"
+            >
+               <Settings size={22} className="text-navy-dark" />
+            </button>
             <div className="relative mb-6">
-                <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gold/20 shadow-xl">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 border-gold/20 shadow-xl">
                     {avatarUrl ? (
                         <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
                     ) : (
@@ -114,13 +122,36 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
                 </div>
             </div>
             
-            <h2 className="text-3xl font-serif font-bold text-navy-dark mb-1">{name}</h2>
-            <p className="text-gold font-sans font-bold uppercase tracking-widest text-xs">Agente Activo FBI</p>
+            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-navy-dark mb-1">{name}</h2>
+            <p className="text-gold font-sans font-bold uppercase tracking-widest text-[10px] sm:text-xs">Agente Activo FBI</p>
         </div>
 
-        {/* Info Cards */}
-        <div className="space-y-4">
-            {/* Username Section */}
+        {/* Separator / Title for Muro Personal */}
+        <div className="text-center mb-6">
+          <h3 className="font-serif text-2xl font-bold text-navy-dark">Tu Muro Personal</h3>
+        </div>
+      </div>
+      
+      {/* Muro Personal Component */}
+      <div className="-mx-4 md:mx-0">
+        <Comunidad hideTabs={true} authorId={profile?.id} initialProfile={profile} isAllowedToFetch={true} />
+      </div>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 bg-navy-dark/40 backdrop-blur-sm animate-fade-in">
+           <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up flex flex-col max-h-[90vh]">
+              <div className="p-4 flex justify-between items-center bg-cream/30 border-b border-light-gray sticky top-0 z-10">
+                 <h3 className="font-serif font-bold text-xl text-navy-dark flex items-center gap-2 px-2">
+                    <Settings size={20} className="text-gold" /> Configuración General
+                 </h3>
+                 <button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full hover:bg-gray-100 transition shadow-sm border border-gold/10 text-navy-dark">
+                    <X size={20} />
+                 </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-4">
+                 {/* Username Section */}
             <div className="bg-cream/40 p-6 rounded-3xl border border-light-gray">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -259,17 +290,10 @@ export default function ProfileSection({ profile: initialProfile }: { profile: a
             </button>
         </div>
 
-        {/* Separator / Title for Muro Personal */}
-        <div className="mt-16 mb-8 text-center max-w-xl mx-auto">
-          <h3 className="font-serif text-3xl font-bold text-navy-dark mb-2">Tu Muro Personal</h3>
-          <p className="font-sans text-sm text-navy-dark/60">Todo lo que publicas aquí se comparte también con la comunidad de embajadores.</p>
+              </div>
+           </div>
         </div>
-      </div>
-      
-      {/* Muro Personal Component */}
-      <div className="-mx-4 md:mx-0">
-        <Comunidad hideTabs={true} authorId={profile?.id} initialProfile={profile} isAllowedToFetch={true} />
-      </div>
+      )}
     </section>
   );
 }
