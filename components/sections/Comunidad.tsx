@@ -1115,8 +1115,8 @@ export default function Comunidad({
 
       {/* Post Strategy Bottom Sheet */}
       {showPostSheet && typeof window !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-navy-dark/60 backdrop-blur-sm animate-fade-in sm:items-center">
-          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up relative">
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-navy-dark/60 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-12 fade-in duration-300 relative">
             <div className="absolute top-3 w-12 h-1.5 bg-gray-200 rounded-full left-1/2 -translate-x-1/2 sm:hidden" />
             <div className="p-6 pt-10 sm:pt-6 border-b border-light-gray flex items-center justify-between">
               <div>
