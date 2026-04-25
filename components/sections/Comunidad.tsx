@@ -89,6 +89,7 @@ export default function Comunidad({
   const [showPostSheet, setShowPostSheet] = useState(false);
   const [checkingStreak, setCheckingStreak] = useState(false);
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -523,6 +524,7 @@ export default function Comunidad({
       if (error) throw error;
       
       setInlinePostContent("");
+      setIsComposing(false);
       showToast("¡Publicado correctamente!");
       fetchPosts(0, false);
       window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
@@ -673,7 +675,7 @@ export default function Comunidad({
             )}
 
             {/* Inline Post Trigger (Fake Box) */}
-            {!postId && activeTab !== "oratorio" && !inlinePostContent && (
+            {!postId && inlinePostContent.trim() === "" && activeTab !== "oratorio" && !isComposing && (
               <div 
                 className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-gray-100 p-4 mb-4 flex gap-3 items-center cursor-pointer hover:bg-gray-50/50 transition-colors"
                 onClick={() => setShowPostSheet(true)}
@@ -691,7 +693,7 @@ export default function Comunidad({
             )}
 
             {/* Always mount the actual TextArea but only show it if they are typing OR selected an option OR are in Oratorio */}
-            {!postId && (inlinePostContent.trim() !== "" || activeTab === "oratorio") && (
+            {!postId && (inlinePostContent.trim() !== "" || isComposing || activeTab === "oratorio") && (
               <div className={`bg-white rounded-2xl shadow-sm border border-gold/20 p-4 mb-4 flex gap-3 items-start animate-fade-in`}>
                 <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {initialProfile?.avatar_url && activeTab !== "oratorio"
@@ -711,7 +713,7 @@ export default function Comunidad({
                   />
                   {inlinePostContent.trim() && (
                     <div className="flex justify-between items-center animate-in fade-in pt-1">
-                      <button onClick={() => setInlinePostContent('')} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
+                      <button onClick={() => { setInlinePostContent(''); setIsComposing(false); }} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
                         Cancelar
                       </button>
                       <button 
@@ -1230,6 +1232,7 @@ export default function Comunidad({
                     }
                     
                     setInlinePostContent(`🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${newDays} días (Récord: ${newMaxStreak} días) 🔥\n\nEscribe tu misión aquí: `);
+                    setIsComposing(true);
                     setShowPostSheet(false);
                     setTimeout(() => {
                       const txt = document.getElementById("inline-real-content") as HTMLTextAreaElement;
@@ -1272,6 +1275,7 @@ export default function Comunidad({
                 disabled={checkingStreak}
                 onClick={() => {
                    setInlinePostContent("");
+                   setIsComposing(true);
                    setShowPostSheet(false);
                    setTimeout(() => document.getElementById("inline-real-content")?.focus(), 100);
                 }}
