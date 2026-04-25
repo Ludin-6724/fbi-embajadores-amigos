@@ -279,8 +279,13 @@ export default function Rachas({
       if (!reqError) {
         // Otorgar 10 puntos si la racha creció (y no fue día repetido)
         if (newDays > (oldStreak?.streak_days || 0)) {
-            await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 });
-            setMyPoints((prev: any) => prev + 10);
+            try {
+              const { error: rpcErr } = await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 });
+              if (!rpcErr) setMyPoints((prev: any) => prev + 10);
+              else console.warn("award_streak_points error:", rpcErr.message);
+            } catch (e) {
+              console.warn("award_streak_points unavailable:", e);
+            }
         }
 
         // Solo publicar en el muro si fue un check-in real (NO protector)
