@@ -55,6 +55,14 @@ function findRootParentId(commentId: string, allComments: CommentPreview[]): str
   return findRootParentId(current.parent_id, allComments);
 }
 
+const YT_REGEX = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})(?:[?&#][^\s]*)?/i;
+
+function extractYouTube(content: string): { videoId: string | null; cleanedText: string } {
+  const match = content.match(YT_REGEX);
+  if (!match) return { videoId: null, cleanedText: content };
+  return { videoId: match[1], cleanedText: content.replace(match[0], "").trim() };
+}
+
 export default function Comunidad({
   communityId, initialTab = "muro", hideTabs = false,
   postId, initialProfile, isAllowedToFetch = true, initialPosts = EMPTY_INITIAL_POSTS, authorId
@@ -90,6 +98,7 @@ export default function Comunidad({
   const [checkingStreak, setCheckingStreak] = useState(false);
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
+  const [isStreakMode, setIsStreakMode] = useState(false);
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -523,6 +532,67 @@ export default function Comunidad({
 
       if (error) throw error;
       
+      if (isStreakMode) {
+        try {
+          const supabase = sbRef.current;
+          const { data: myStreak } = await supabase.from("streaks").select("*").eq("user_id", userId).is("community_id", communityId || null).maybeSingle();
+          
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          let newDays = 1;
+          let newMax = 1;
+          let requiresInsert = !myStreak;
+
+          if (myStreak && myStreak.last_checkin) {
+            newMax = myStreak.max_streak;
+            const last = new Date(myStreak.last_checkin);
+            last.setHours(0, 0, 0, 0);
+            const diffTime = today.getTime() - last.getTime();
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) {
+              newDays = myStreak.streak_days;
+            } else if (diffDays === 1) {
+              newDays = myStreak.streak_days + 1;
+            } else {
+              const daysMissed = diffDays - 1;
+              const { data: prof } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
+              const protectors = prof?.streak_protectors || 0;
+              if (protectors >= daysMissed) {
+                for (let i=0; i<daysMissed; i++) { await supabase.rpc('consume_protector', { user_id: userId }); }
+                newDays = myStreak.streak_days + 1;
+              } else {
+                newDays = 1;
+              }
+            }
+          }
+
+          if (!myStreak || (myStreak && myStreak.last_checkin && new Date(myStreak.last_checkin).setHours(0,0,0,0) !== today.getTime())) {
+            const newMaxStreak = Math.max(newMax, newDays);
+            const payload = {
+              user_id: userId,
+              streak_days: newDays,
+              max_streak: newMaxStreak,
+              last_checkin: new Date().toISOString(),
+              last_mission_title: "Misión Vía Muro",
+              last_mission_note: "Publicación en el muro",
+              community_id: communityId || null
+            };
+
+            if (requiresInsert) await supabase.from("streaks").insert(payload);
+            else await supabase.from("streaks").update(payload).eq("id", myStreak.id);
+
+            if (newDays > (myStreak?.streak_days || 0)) {
+              try { await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 }); } catch(err){}
+            }
+            setHasCheckedInToday(true);
+          }
+        } catch (err) {
+          console.error("Error validando racha en post", err);
+        }
+        setIsStreakMode(false);
+      }
+
       setInlinePostContent("");
       setIsComposing(false);
       showToast("¡Publicado correctamente!");
@@ -706,14 +776,14 @@ export default function Comunidad({
                     id="inline-real-content"
                     value={inlinePostContent}
                     onChange={e => setInlinePostContent(e.target.value)}
-                    placeholder={activeTab === "muro" ? "Continúa tu publicación aquí..." : "Escribe tu petición de forma anónima..."}
+                    placeholder={activeTab === "muro" ? "Continúa tu publicación aquí... (puedes pegar un link de YouTube y se reproducirá en el post)" : "Escribe tu petición de forma anónima..."}
                     className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none transition-all"
                     rows={inlinePostContent.includes('\n') ? 4 : 2}
                     autoFocus
                   />
                   {inlinePostContent.trim() && (
                     <div className="flex justify-between items-center animate-in fade-in pt-1">
-                      <button onClick={() => { setInlinePostContent(''); setIsComposing(false); }} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
+                      <button onClick={() => { setInlinePostContent(''); setIsComposing(false); setIsStreakMode(false); }} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
                         Cancelar
                       </button>
                       <button 
@@ -829,7 +899,28 @@ export default function Comunidad({
                         </div>
                       </div>
                     ) : (
-                      <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                      (() => {
+                        const { videoId, cleanedText } = extractYouTube(post.content);
+                        return (
+                          <>
+                            {cleanedText && (
+                              <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap">{cleanedText}</p>
+                            )}
+                            {videoId && (
+                              <div className={`-mx-4 sm:mx-0 sm:rounded-2xl overflow-hidden border-y sm:border border-gray-100 bg-black aspect-video ${cleanedText ? "mt-3" : ""}`}>
+                                <iframe
+                                  src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`}
+                                  title="Video de YouTube"
+                                  loading="lazy"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                                  allowFullScreen
+                                  className="w-full h-full"
+                                />
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()
                     )}
                   </div>
 
@@ -1180,8 +1271,6 @@ export default function Comunidad({
                     today.setHours(0, 0, 0, 0);
                     let newDays = 1;
                     let newMax = 1;
-                    let daysMissed = 0;
-                    let requiresInsert = !myStreak;
 
                     if (myStreak && myStreak.last_checkin) {
                       newMax = myStreak.max_streak;
@@ -1191,7 +1280,6 @@ export default function Comunidad({
                       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
                       if (diffDays === 0) {
-                        // Already checked in
                         setInlinePostContent(`🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${myStreak.streak_days} días (Récord: ${myStreak.max_streak} días) 🔥\n\n`);
                         setShowPostSheet(false);
                         setCheckingStreak(false);
@@ -1200,11 +1288,10 @@ export default function Comunidad({
                       } else if (diffDays === 1) {
                         newDays = myStreak.streak_days + 1;
                       } else {
-                        daysMissed = diffDays - 1;
+                        const daysMissed = diffDays - 1;
                         const { data: prof } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
                         const protectors = prof?.streak_protectors || 0;
                         if (protectors >= daysMissed) {
-                           for (let i=0; i<daysMissed; i++) { await supabase.rpc('consume_protector', { user_id: userId }); }
                            newDays = myStreak.streak_days + 1;
                         } else {
                            newDays = 1;
@@ -1213,26 +1300,10 @@ export default function Comunidad({
                     }
 
                     const newMaxStreak = Math.max(newMax, newDays);
-                    const payload = {
-                      user_id: userId,
-                      streak_days: newDays,
-                      max_streak: newMaxStreak,
-                      last_checkin: new Date().toISOString(),
-                      last_mission_title: "Misión Vía Muro",
-                      last_mission_note: "Post especial",
-                      community_id: communityId || null
-                    };
-
-                    if (requiresInsert) await supabase.from("streaks").insert(payload);
-                    else await supabase.from("streaks").update(payload).eq("id", myStreak.id);
-
-                    // Puntos
-                    if (newDays > (myStreak?.streak_days || 0)) {
-                      try { await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 }); } catch(err){}
-                    }
                     
                     setInlinePostContent(`🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${newDays} días (Récord: ${newMaxStreak} días) 🔥\n\nEscribe tu misión aquí: `);
                     setIsComposing(true);
+                    setIsStreakMode(true);
                     setShowPostSheet(false);
                     setTimeout(() => {
                       const txt = document.getElementById("inline-real-content") as HTMLTextAreaElement;
