@@ -64,3 +64,44 @@ body {
   overflow-x: hidden;
   scroll-behavior: smooth;
 }
+
+/* ─── Dark Mode ─── */
+html.dark {
+  color-scheme: dark;
+
+  /* Surface colors */
+  --color-cream: #0d1627;
+  --color-light-gray: #1e3050;
+  --color-white: #152238;
+
+  /* Text that was dark-navy now becomes light */
+  --color-navy-dark: #dde6f7;
+  --color-navy: #7e9bbf;
+
+  /* Page background / body foreground */
+  --background: #0d1627;
+  --foreground: #dde6f7;
+}
+
+/* bg-navy-dark / bg-navy are dark headers — keep them dark in dark mode */
+html.dark .bg-navy-dark { background-color: #0a1220 !important; }
+html.dark .bg-navy      { background-color: #11213a !important; }
+
+/* Tailwind built-in grays used as surfaces */
+html.dark .bg-gray-50,
+html.dark .bg-gray-50\/50,
+html.dark .bg-gray-50\/80 { background-color: #162232 !important; }
+html.dark .bg-gray-100   { background-color: #1a2a40 !important; }
+html.dark .bg-gray-200   { background-color: #1e3050 !important; }
+
+/* Gray border overrides */
+html.dark .border-gray-50  { border-color: #1a2d47 !important; }
+html.dark .border-gray-100 { border-color: #1e3050 !important; }
+html.dark .border-gray-200 { border-color: #253d5e !important; }
+
+/* Bottom nav bar */
+html.dark .bg-white\/97 { background-color: rgba(21, 34, 56, 0.97) !important; }
+
+/* Scrollbar tint */
+html.dark ::-webkit-scrollbar-track { background: #0d1627; }
+html.dark ::-webkit-scrollbar-thumb { background: #1e3050; }

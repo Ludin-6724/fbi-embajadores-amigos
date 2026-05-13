@@ -4,6 +4,7 @@ import "./globals.css";
 import PWAProvider from "@/components/providers/PWAProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import UpdateBanner from "@/components/providers/UpdateBanner";
+import DarkModeProvider from "@/components/providers/DarkModeProvider";
 import GlobalInstallPrompt from "@/components/ui/GlobalInstallPrompt";
 import GlobalPushPrompt from "@/components/ui/GlobalPushPrompt";
 
@@ -31,8 +32,15 @@ export default function RootLayout({
     <html
       lang="es"
       className={`${inter.variable} ${playfair.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <head>
+        {/* Prevent flash of un-themed content on page load */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('dark-mode')==='true')document.documentElement.classList.add('dark')}catch(e){}`,
+          }}
+        />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="theme-color" content="#0A1128" />
@@ -41,14 +49,16 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </head>
       <body className="min-h-full flex flex-col font-sans">
-        <QueryProvider>
-          <PWAProvider>
-            {children}
-            <UpdateBanner />
-            <GlobalInstallPrompt />
-            <GlobalPushPrompt />
-          </PWAProvider>
-        </QueryProvider>
+        <DarkModeProvider>
+          <QueryProvider>
+            <PWAProvider>
+              {children}
+              <UpdateBanner />
+              <GlobalInstallPrompt />
+              <GlobalPushPrompt />
+            </PWAProvider>
+          </QueryProvider>
+        </DarkModeProvider>
       </body>
     </html>
   );

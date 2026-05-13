@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Menu, X, LogOut, User, PenLine, Users, ChevronRight,
-  Loader2, Check, Shield, Home, Heart, PlusCircle, Flame
+  Loader2, Check, Shield, Home, Heart, PlusCircle, Flame,
+  Moon, Sun
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import NotificationCenter from "./NotificationCenter";
 import InstallPWA from "./InstallPWA";
+import { useDarkMode } from "@/components/providers/DarkModeProvider";
 
 export default function Navbar({ 
   initialUser, 
@@ -33,6 +35,7 @@ export default function Navbar({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
   const router = useRouter();
+  const { dark, toggle: toggleDark } = useDarkMode();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -374,6 +377,29 @@ export default function Navbar({
                           <ChevronRight size={14} className="text-navy-dark/20 group-hover/item:text-gold/60 transition-colors flex-shrink-0" />
                         </button>
                       ))}
+
+                      {/* Dark mode toggle */}
+                      <button
+                        onClick={toggleDark}
+                        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-cream/70 transition-colors group/item"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-gold/8 flex items-center justify-center flex-shrink-0 group-hover/item:bg-gold/15 transition-colors">
+                          {dark ? <Sun size={15} className="text-gold" /> : <Moon size={15} className="text-gold" />}
+                        </div>
+                        <div className="flex-1 text-left min-w-0">
+                          <p className="font-sans text-sm font-semibold text-navy-dark group-hover/item:text-gold transition-colors">
+                            {dark ? "Modo claro" : "Modo oscuro"}
+                          </p>
+                          <p className="font-sans text-[11px] text-navy-dark/45 truncate">
+                            {dark ? "Volver al tema de día" : "Tema para la noche"}
+                          </p>
+                        </div>
+                        {/* Toggle pill */}
+                        <div className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors ${dark ? "bg-gold" : "bg-navy-dark/20"}`}>
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${dark ? "translate-x-4" : "translate-x-0"}`} />
+                        </div>
+                      </button>
+
                       <InstallPWA />
                     </div>
 
@@ -453,6 +479,16 @@ export default function Navbar({
                     className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-cream border border-light-gray rounded-full font-sans font-semibold text-navy-dark text-sm hover:border-gold/30 transition-colors"
                   >
                     <PenLine size={16} className="text-gold" /> Cambiar nombre
+                  </button>
+                  <button
+                    onClick={toggleDark}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-cream border border-light-gray rounded-full font-sans font-semibold text-navy-dark text-sm hover:border-gold/30 transition-colors"
+                  >
+                    {dark ? <Sun size={16} className="text-gold" /> : <Moon size={16} className="text-gold" />}
+                    {dark ? "Modo claro" : "Modo oscuro"}
+                    <div className={`relative ml-auto w-9 h-5 rounded-full transition-colors ${dark ? "bg-gold" : "bg-navy-dark/20"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${dark ? "translate-x-4" : "translate-x-0"}`} />
+                    </div>
                   </button>
                   <InstallPWA />
                   <button
