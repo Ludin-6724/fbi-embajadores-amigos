@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame, Coins, Store, Settings } from "lucide-react";
+import { User, PenLine, Shield, Mail, Calendar, LogOut, Check, Loader2, X, Flame, Coins, Store, Settings, Moon, Sun } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Comunidad from "./Comunidad";
+import { useDarkMode } from "@/components/providers/DarkModeProvider";
 
 export default function ProfileSection({ profile: initialProfile, isOwnProfile = true }: { profile: any, isOwnProfile?: boolean }) {
   const [profile, setProfile] = useState(initialProfile);
@@ -19,6 +20,7 @@ export default function ProfileSection({ profile: initialProfile, isOwnProfile =
   
   const supabase = createClient();
   const router = useRouter();
+  const { dark, toggle: toggleDark } = useDarkMode();
 
   useEffect(() => {
     if (initialProfile?.id) {
@@ -102,13 +104,26 @@ export default function ProfileSection({ profile: initialProfile, isOwnProfile =
          {/* Header / Avatar */}
         <div className="flex flex-col items-center mb-8 text-center relative pt-4">
             {isOwnProfile && (
-              <button 
-                 onClick={() => setShowSettings(true)}
-                 className="absolute top-0 right-0 p-3 bg-cream/50 text-navy-dark hover:bg-gold/20 rounded-full transition-all"
-                 title="Configuración de Cuenta"
-              >
-                 <Settings size={22} className="text-navy-dark" />
-              </button>
+              <div className="absolute top-0 right-0 flex items-center gap-2">
+                {/* Dark mode toggle */}
+                <button
+                  onClick={toggleDark}
+                  className="p-3 bg-cream/50 text-navy-dark hover:bg-gold/20 rounded-full transition-all"
+                  title={dark ? "Activar modo claro" : "Activar modo oscuro"}
+                >
+                  {dark
+                    ? <Sun size={22} className="text-gold" />
+                    : <Moon size={22} className="text-navy-dark" />
+                  }
+                </button>
+                <button 
+                   onClick={() => setShowSettings(true)}
+                   className="p-3 bg-cream/50 text-navy-dark hover:bg-gold/20 rounded-full transition-all"
+                   title="Configuración de Cuenta"
+                >
+                   <Settings size={22} className="text-navy-dark" />
+                </button>
+              </div>
             )}
             <div className="relative mb-6">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 border-gold/20 shadow-xl">
@@ -266,6 +281,26 @@ export default function ProfileSection({ profile: initialProfile, isOwnProfile =
                     </div>
                 </div>
             </div>
+
+            {/* Dark mode toggle inside settings */}
+            <button
+              onClick={toggleDark}
+              className="w-full bg-cream/40 p-5 rounded-3xl border border-light-gray flex items-center justify-between gap-4 hover:bg-gold/5 hover:border-gold/20 transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-navy-dark/5 flex items-center justify-center text-navy-dark/60 group-hover:bg-gold/10 transition-colors">
+                  {dark ? <Sun size={20} className="text-gold" /> : <Moon size={20} />}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs text-navy-dark/50 font-bold uppercase tracking-wider">Apariencia</p>
+                  <p className="text-navy-dark font-sans font-semibold">{dark ? "Modo oscuro activado" : "Modo claro activado"}</p>
+                </div>
+              </div>
+              {/* Toggle pill */}
+              <div className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 ${dark ? "bg-gold" : "bg-navy-dark/20"}`}>
+                <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${dark ? "translate-x-5" : "translate-x-0"}`} />
+              </div>
+            </button>
 
             {/* Tienda — redirigir a Rachas */}
             <button 
