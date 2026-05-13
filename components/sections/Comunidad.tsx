@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
 import Link from "next/link";
 import { cache } from "@/lib/utils/cache";
+import { YT_REGEX, extractFirstUrl, linkify } from "@/lib/utils/links";
+import LinkPreviewCard from "@/components/ui/LinkPreviewCard";
 
 /* ─── Types ─── */
 type ReactionRow = { id: string; user_id: string; reaction: ReactionType };
@@ -54,8 +56,6 @@ function findRootParentId(commentId: string, allComments: CommentPreview[]): str
   if (!current || !current.parent_id) return commentId;
   return findRootParentId(current.parent_id, allComments);
 }
-
-const YT_REGEX = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})(?:[?&#][^\s]*)?/i;
 
 function extractYouTube(content: string): { videoId: string | null; cleanedText: string } {
   const match = content.match(YT_REGEX);
@@ -901,10 +901,28 @@ export default function Comunidad({
                     ) : (
                       (() => {
                         const { videoId, cleanedText } = extractYouTube(post.content);
+                        const previewUrl = videoId ? null : extractFirstUrl(post.content);
+                        const segments = linkify(cleanedText);
                         return (
                           <>
                             {cleanedText && (
-                              <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap">{cleanedText}</p>
+                              <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap">
+                                {segments.map((seg, i) =>
+                                  seg.type === "url" ? (
+                                    <a
+                                      key={i}
+                                      href={seg.value}
+                                      target="_blank"
+                                      rel="noopener noreferrer nofollow"
+                                      className="text-gold underline underline-offset-2 hover:text-gold/70 break-all"
+                                    >
+                                      {seg.value}
+                                    </a>
+                                  ) : (
+                                    <span key={i}>{seg.value}</span>
+                                  )
+                                )}
+                              </p>
                             )}
                             {videoId && (
                               <div className={`-mx-4 sm:mx-0 sm:rounded-2xl overflow-hidden border-y sm:border border-gray-100 bg-black aspect-video ${cleanedText ? "mt-3" : ""}`}>
@@ -918,6 +936,7 @@ export default function Comunidad({
                                 />
                               </div>
                             )}
+                            {previewUrl && <LinkPreviewCard url={previewUrl} />}
                           </>
                         );
                       })()
