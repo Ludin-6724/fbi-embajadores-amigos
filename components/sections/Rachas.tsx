@@ -5,6 +5,10 @@ import { Flame, Trophy, CheckCircle, Loader2, Target, PenTool, Shield, Coins, Sp
 import { createClient } from "@/lib/supabase/client";
 import confetti from "canvas-confetti";
 import { cache } from "@/lib/utils/cache";
+import {
+  registerStreakCheckIn,
+  hasCheckedInOnMissionDay,
+} from "@/lib/streaks/checkIn";
 
 type Streak = {
   streak_days: number;
@@ -134,7 +138,10 @@ export default function Rachas({
           cache.set(`my_streak_${userId}_${communityId || 'global'}`, mine);
         }
         else {
-          supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle().then(({ data: myD }: { data: any; error: any }) => {
+          let myQ = supabase.from("streaks").select("*").eq("user_id", userId);
+          if (communityId) myQ = myQ.eq("community_id", communityId);
+          else myQ = myQ.is("community_id", null);
+          myQ.maybeSingle().then(({ data: myD }: { data: any; error: any }) => {
             if (myD) {
               setMyStreak(myD as any);
               cache.set(`my_streak_${userId}_${communityId || 'global'}`, myD as any);
@@ -192,159 +199,67 @@ export default function Rachas({
     setCheckingIn(true);
     setStatusMsg(null);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let newDays = 1;
-    let protectorUsed = false;
-    let daysMissed = 0;
-
-    if (myStreak && myStreak.last_checkin) {
-      const last = new Date(myStreak.last_checkin);
-      last.setHours(0, 0, 0, 0);
-      
-      const diffTime = today.getTime() - last.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 0) { 
-        newDays = myStreak.streak_days; 
-        setStatusMsg({ message: "Ya registraste tu misión de hoy, pero vamos a actualizar tu nota.", type: 'success' });
-      } else if (diffDays === 1) {
-        newDays = myStreak.streak_days + 1;
-      } else {
-        // DiffDays > 1: Falló algunos días. Revisar si hay protectores.
-        daysMissed = diffDays - 1;
-        try {
-          const { data: profileData } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
-          const protectors = profileData?.streak_protectors || 0;
-          
-          if (protectors >= daysMissed) {
-            let consumed = 0;
-            for (let i = 0; i < daysMissed; i++) {
-               const { data: ok } = await supabase.rpc('consume_protector', { user_id: userId });
-               if (ok) consumed++;
-            }
-            if (consumed === daysMissed) {
-                newDays = myStreak.streak_days + 1; // Racha salvada
-                protectorUsed = true;
-                setMyProtectors((prev: any) => Math.max(0, prev - daysMissed));
-                setStatusMsg({ message: `Fallaste ${daysMissed} día(s), ¡Pero tu(s) Protector(es) salvaron tu racha! 🛡️🔥`, type: 'success' });
-            } else {
-                newDays = 1;
-                setStatusMsg({ message: `Tu racha se reinició. No tenías suficientes protectores. ¡Vamos de nuevo! 💪`, type: 'error' });
-            }
-          } else {
-            newDays = 1;
-            setStatusMsg({ message: `Perdiste ${daysMissed} día(s) sin registrar. Tu racha se reinició a 1. ¡Vamos de nuevo! 💪`, type: 'error' });
-          }
-        } catch (e) {
-          console.warn("Could not check protectors", e);
-          newDays = 1;
-        }
-      }
-    }
-
-    const newMaxStreak = Math.max(myStreak?.max_streak || 0, newDays);
-
-    const payload = {
-      user_id: userId, 
-      streak_days: newDays, 
-      max_streak: newMaxStreak,
-      last_checkin: new Date().toISOString(),
-      last_mission_title: "Misión Completada",
-      last_mission_note: missionNote.trim(),
-      community_id: communityId || null
-    };
-
-    // Optimistic UI: assume success to give instant feedback
-    const oldStreak = myStreak;
-    setMyStreak({
-      ...payload,
-      profiles: myStreak?.profiles || null
-    } as any);
-
     try {
-      let reqError;
-      const { data: existing } = await supabase
-        .from("streaks")
-        .select("id")
-        .eq("user_id", userId)
-        .is("community_id", communityId || null)
-        .maybeSingle();
+      const result = await registerStreakCheckIn(supabase, {
+        missionNote: missionNote.trim(),
+        communityId: communityId ?? null,
+      });
 
-      if (existing) {
-         const { error } = await supabase.from("streaks").update(payload).eq("id", existing.id);
-         reqError = error;
-      } else {
-         const { error } = await supabase.from("streaks").insert(payload);
-         reqError = error;
+      if (!result.ok) {
+        setStatusMsg({
+          message: result.message ?? "No se pudo registrar la misión.",
+          type: "error",
+        });
+        return;
       }
 
-      if (!reqError) {
-        // Otorgar 10 puntos si la racha creció (y no fue día repetido)
-        if (newDays > (oldStreak?.streak_days || 0)) {
-            try {
-              const { error: rpcErr } = await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 });
-              if (!rpcErr) setMyPoints((prev: any) => prev + 10);
-              else console.warn("award_streak_points error:", rpcErr.message);
-            } catch (e) {
-              console.warn("award_streak_points unavailable:", e);
-            }
-        }
+      const isStreakReset =
+        (result.streak_days ?? 0) === 1 &&
+        (myStreak?.streak_days ?? 0) > 1 &&
+        !result.same_day_update &&
+        !result.protector_used;
 
-        // Solo publicar en el muro si fue un check-in real (NO protector)
-        if (!protectorUsed) {
-          try {
-            await supabase.from("posts").insert({
-              author_id: userId,
-              content: `🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${newDays} días (Récord: ${newMaxStreak} días) 🔥\n\n"${missionNote.trim()}"`,
-              is_anonymous: false,
-              community_id: communityId || null
-            });
-          } catch (e) {
-            console.warn("Failed to auto-post mission milestone to wall", e);
-          }
-        }
+      setStatusMsg({
+        message: result.message ?? "¡Misión registrada con éxito!",
+        type: isStreakReset ? "error" : "success",
+      });
 
-        // Si se usó un protector, enviar notificación
-        if (protectorUsed) {
-          try {
-            await supabase.from("notifications").insert({
-              user_id: userId,
-              actor_id: userId,
-              type: "protector_used",
-              message: `🛡️ Tu protector salvó tu racha de ${newDays - 1} días. Cubrió ${daysMissed} día(s) de ausencia. ¡Sigue sin fallar!`,
-              link: "#rachas"
-            });
-          } catch (e) {
-            console.warn("Notification for protector use failed", e);
-          }
-        }
-
-        if (!statusMsg) {
-          setStatusMsg({ message: "¡Misión registrada con éxito! Tu racha ha subido y ganaste 10 🪙.", type: 'success' });
-        }
-        await fetchData();
-        setMissionNote("");
-      } else {
-        throw reqError;
+      if (result.points_awarded) {
+        setMyPoints((prev: number) => prev + result.points_awarded!);
       }
-    } catch (err: any) {
+      if (result.protector_used) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("streak_protectors")
+          .eq("id", userId)
+          .single();
+        if (prof) setMyProtectors(prof.streak_protectors || 0);
+      }
+
+      if (result.post_created) {
+        confetti({
+          particleCount: 120,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ["#D4A017", "#FF4500", "#FFA500", "#101726"],
+        });
+        cache.remove(`posts_muro_${communityId || "global"}`);
+        window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
+      }
+
+      await fetchData();
+      setMissionNote("");
+    } catch (err: unknown) {
       console.error("Error updating streak:", err);
-      setStatusMsg({ message: `Error: ${err.message || 'No se pudo guardar'}`, type: 'error' });
-      setMyStreak(oldStreak); // Rollback optimistic UI
+      const msg = err instanceof Error ? err.message : "No se pudo guardar";
+      setStatusMsg({ message: `Error: ${msg}`, type: "error" });
     } finally {
       setCheckingIn(false);
     }
   };
 
-  const hasCheckedInToday = () => {
-    if (!myStreak || !myStreak.last_checkin) return false;
-    const last = new Date(myStreak.last_checkin);
-    const today = new Date();
-    return last.getDate() === today.getDate() && 
-           last.getMonth() === today.getMonth() && 
-           last.getFullYear() === today.getFullYear();
-  };
+  const hasCheckedInToday = () =>
+    hasCheckedInOnMissionDay(myStreak?.last_checkin);
 
 
 

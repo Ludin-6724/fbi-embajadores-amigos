@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PenSquare, UserMinus, Flame, Users, X, Loader2, Globe, Lock, Target, CheckCircle, PenTool, Rocket, MessageSquare } from "lucide-react";
+import { PenSquare, UserMinus, Flame, Users, X, Loader2, Globe, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type DashboardActionsProps = {
@@ -12,15 +12,11 @@ type DashboardActionsProps = {
 };
 
 export default function DashboardActions({ profile, isCommunity = false, hideVisuals = false }: DashboardActionsProps) {
-  const [activeModal, setActiveModal] = useState<"post" | "prayer" | "community" | "selector" | "streak" | null>(null);
+  const [activeModal, setActiveModal] = useState<"post" | "prayer" | "community" | "selector" | null>(null);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [commPrivate, setCommPrivate] = useState(false);
-  
-  // Streak state
-  const [myStreak, setMyStreak] = useState<any>(null);
-  const [loadingStreak, setLoadingStreak] = useState(false);
 
   const supabase = createClient();
   const router = useRouter();
@@ -52,25 +48,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     };
   }, []);
 
-  useEffect(() => {
-    if (activeModal === "streak") {
-        fetchMyStreak();
-    }
-  }, [activeModal]);
-
-  const fetchMyStreak = async () => {
-    if (!profile?.id) return;
-    setLoadingStreak(true);
-    const { data } = await supabase
-        .from("streaks")
-        .select("*")
-        .eq("user_id", profile.id)
-        .is("community_id", null)
-        .maybeSingle();
-    setMyStreak(data);
-    setLoadingStreak(false);
-  };
-
   const handlePostSubmit = async (e: React.FormEvent, isAnonymous: boolean) => {
     e.preventDefault();
     if (!content.trim() || !profile) return;
@@ -89,53 +66,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     } else {
       console.error(error);
       setFormError(`Error al publicar: ${error.message}`);
-      setSubmitting(false);
-    }
-  };
-
-  const handleStreakSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!content.trim() || !profile?.id || submitting) return;
-    setSubmitting(true);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let newDays = 1;
-
-    if (myStreak && myStreak.last_checkin) {
-      const last = new Date(myStreak.last_checkin);
-      last.setHours(0, 0, 0, 0);
-      const diffTime = today.getTime() - last.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 0) newDays = myStreak.streak_days;
-      else if (diffDays === 1) newDays = myStreak.streak_days + 1;
-      else newDays = 1;
-    }
-
-    const payload = {
-      user_id: profile.id,
-      streak_days: newDays,
-      last_checkin: new Date().toISOString(),
-      last_mission_title: "Misión Completada",
-      last_mission_note: content.trim(),
-      community_id: null
-    };
-
-    const { error: streakError } = await (myStreak 
-      ? supabase.from("streaks").update(payload).eq("id", myStreak.id)
-      : supabase.from("streaks").insert(payload));
-
-    if (!streakError) {
-      await supabase.from("posts").insert({
-        author_id: profile.id,
-        content: `🔥 Misión completada - Día ${newDays}!\n\n"${content.trim()}"`,
-        is_anonymous: false
-      });
-      handleClose();
-      router.refresh();
-    } else {
-      setFormError(`Error al guardar racha: ${streakError.message}`);
       setSubmitting(false);
     }
   };
@@ -259,7 +189,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                 {activeModal === "selector" ? "Selecciona una Acción" : 
                  activeModal === "post" ? "Crear Publicación" : 
                  activeModal === "prayer" ? "Petición Anónima" : 
-                 activeModal === "streak" ? "Registrar Misión Diaria" :
                  "Nueva Comunidad"}
               </h3>
               <button onClick={handleClose} className="text-navy-dark/50 hover:text-navy-dark p-1">
@@ -346,15 +275,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                 </div>
               ) : (
                 <div className="space-y-4">
-                 {activeModal === "streak" && (
-                    <div className="bg-orange-500/5 p-4 rounded-2xl border border-orange-500/10 flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                            <Flame className="text-orange-600 fill-orange-600/20" size={24} />
-                            <span className="font-serif font-bold text-navy-dark">Tu Racha Actual</span>
-                        </div>
-                        <span className="text-2xl font-black text-orange-600">{myStreak?.streak_days || 0}</span>
-                    </div>
-                 )}
                  <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
@@ -378,13 +298,12 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
             {activeModal !== "selector" && (
               <div className="p-5 sm:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom,24px))] sm:pb-6 border-t border-light-gray bg-white flex justify-end flex-shrink-0 sm:rounded-b-3xl">
                 <button 
-                  onClick={(e) => activeModal === "community" ? handleCommunitySubmit() : (activeModal === "streak" ? handleStreakSubmit(e as any) : handlePostSubmit(e as any, activeModal === "prayer"))}
+                  onClick={(e) => activeModal === "community" ? handleCommunitySubmit() : handlePostSubmit(e as any, activeModal === "prayer")}
                   disabled={activeModal !== "community" && (submitting || !content.trim())}
-                  className={`px-8 py-4 w-full sm:w-auto ${activeModal === "streak" ? "bg-orange-600" : "bg-gold"} hover:opacity-90 disabled:opacity-50 text-white font-sans font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2`}
+                  className="px-8 py-4 w-full sm:w-auto bg-gold hover:opacity-90 disabled:opacity-50 text-white font-sans font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2"
                 >
                   {submitting ? <Loader2 className="animate-spin" size={18} /> : 
-                   activeModal === "community" ? "Fundar Comunidad" :
-                   activeModal === "streak" ? "Registrar y Publicar Racha" : "Publicar Mensaje"}
+                   activeModal === "community" ? "Fundar Comunidad" : "Publicar Mensaje"}
                 </button>
               </div>
             )}

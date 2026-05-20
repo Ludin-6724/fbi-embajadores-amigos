@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { createPortal } from "react-dom";
-import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X, Flame } from "lucide-react";
+import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
 import Link from "next/link";
@@ -94,11 +93,7 @@ export default function Comunidad({
   const [inlinePostContent, setInlinePostContent] = useState("");
   const [isSubmittingInline, setIsSubmittingInline] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
-  const [showPostSheet, setShowPostSheet] = useState(false);
-  const [checkingStreak, setCheckingStreak] = useState(false);
-  const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
-  const [isStreakMode, setIsStreakMode] = useState(false);
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -146,25 +141,6 @@ export default function Comunidad({
       if (data?.session?.user) setUserId(data.session.user.id);
     });
   }, [initialProfile]);
-
-  // Check streak status when opening post sheet
-  useEffect(() => {
-    if (showPostSheet && userId) {
-      setCheckingStreak(true);
-      sbRef.current.from("streaks").select("last_checkin").eq("user_id", userId).is("community_id", communityId || null).maybeSingle().then(({data}: {data: any}) => {
-        if (data && data.last_checkin) {
-           const today = new Date();
-           today.setHours(0,0,0,0);
-           const last = new Date(data.last_checkin);
-           last.setHours(0,0,0,0);
-           setHasCheckedInToday(today.getTime() === last.getTime());
-        } else {
-           setHasCheckedInToday(false);
-        }
-        setCheckingStreak(false);
-      });
-    }
-  }, [showPostSheet, userId, communityId]);
 
   // Helper to fetch comments for a list of post IDs
   const fetchCommentsForPosts = useCallback(async (postIds: string[]) => {
@@ -340,6 +316,15 @@ export default function Comunidad({
       supabase.removeChannel(channel);
     };
   }, [isAllowedToFetch, activeTab, communityId, postId, authorId]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      cache.remove(`posts_${activeTab}_${communityId || "global"}`);
+      void fetchPosts(0, false);
+    };
+    window.addEventListener("fbi:refresh-feed", onRefresh);
+    return () => window.removeEventListener("fbi:refresh-feed", onRefresh);
+  }, [activeTab, communityId, fetchPosts]);
 
   // Initial fetch — solo cuando la pestaña está activa; firma estable evita bucles por `[]` nuevo
   useEffect(() => {
@@ -531,67 +516,6 @@ export default function Comunidad({
       });
 
       if (error) throw error;
-      
-      if (isStreakMode) {
-        try {
-          const supabase = sbRef.current;
-          const { data: myStreak } = await supabase.from("streaks").select("*").eq("user_id", userId).is("community_id", communityId || null).maybeSingle();
-          
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          let newDays = 1;
-          let newMax = 1;
-          let requiresInsert = !myStreak;
-
-          if (myStreak && myStreak.last_checkin) {
-            newMax = myStreak.max_streak;
-            const last = new Date(myStreak.last_checkin);
-            last.setHours(0, 0, 0, 0);
-            const diffTime = today.getTime() - last.getTime();
-            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-            if (diffDays === 0) {
-              newDays = myStreak.streak_days;
-            } else if (diffDays === 1) {
-              newDays = myStreak.streak_days + 1;
-            } else {
-              const daysMissed = diffDays - 1;
-              const { data: prof } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
-              const protectors = prof?.streak_protectors || 0;
-              if (protectors >= daysMissed) {
-                for (let i=0; i<daysMissed; i++) { await supabase.rpc('consume_protector', { user_id: userId }); }
-                newDays = myStreak.streak_days + 1;
-              } else {
-                newDays = 1;
-              }
-            }
-          }
-
-          if (!myStreak || (myStreak && myStreak.last_checkin && new Date(myStreak.last_checkin).setHours(0,0,0,0) !== today.getTime())) {
-            const newMaxStreak = Math.max(newMax, newDays);
-            const payload = {
-              user_id: userId,
-              streak_days: newDays,
-              max_streak: newMaxStreak,
-              last_checkin: new Date().toISOString(),
-              last_mission_title: "Misión Vía Muro",
-              last_mission_note: "Publicación en el muro",
-              community_id: communityId || null
-            };
-
-            if (requiresInsert) await supabase.from("streaks").insert(payload);
-            else await supabase.from("streaks").update(payload).eq("id", myStreak.id);
-
-            if (newDays > (myStreak?.streak_days || 0)) {
-              try { await supabase.rpc('award_streak_points', { user_id: userId, points_to_add: 10 }); } catch(err){}
-            }
-            setHasCheckedInToday(true);
-          }
-        } catch (err) {
-          console.error("Error validando racha en post", err);
-        }
-        setIsStreakMode(false);
-      }
 
       setInlinePostContent("");
       setIsComposing(false);
@@ -748,7 +672,10 @@ export default function Comunidad({
             {!postId && inlinePostContent.trim() === "" && activeTab !== "oratorio" && !isComposing && (
               <div 
                 className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-gray-100 p-4 mb-4 flex gap-3 items-center cursor-pointer hover:bg-gray-50/50 transition-colors"
-                onClick={() => setShowPostSheet(true)}
+                onClick={() => {
+                  setIsComposing(true);
+                  setTimeout(() => document.getElementById("inline-real-content")?.focus(), 100);
+                }}
               >
                 <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {initialProfile?.avatar_url 
@@ -783,7 +710,7 @@ export default function Comunidad({
                   />
                   {inlinePostContent.trim() && (
                     <div className="flex justify-between items-center animate-in fade-in pt-1">
-                      <button onClick={() => { setInlinePostContent(''); setIsComposing(false); setIsStreakMode(false); }} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
+                      <button onClick={() => { setInlinePostContent(''); setIsComposing(false); }} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
                         Cancelar
                       </button>
                       <button 
@@ -1259,134 +1186,6 @@ export default function Comunidad({
           </div>
         )}
       </div>
-
-      {/* Post Strategy Bottom Sheet */}
-      {showPostSheet && typeof window !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-navy-dark/60 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center">
-          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-12 fade-in duration-300 relative">
-            <div className="absolute top-3 w-12 h-1.5 bg-gray-200 rounded-full left-1/2 -translate-x-1/2 sm:hidden" />
-            <div className="p-6 pt-10 sm:pt-6 border-b border-light-gray flex items-center justify-between">
-              <div>
-                <h3 className="font-serif font-bold text-2xl text-navy-dark leading-none">Nueva Publicación</h3>
-                <p className="text-sm text-navy-dark/50 mt-1 font-sans">Elige qué te gustaría compartir hoy</p>
-              </div>
-              <button onClick={() => setShowPostSheet(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:text-navy-dark hover:bg-gray-200 transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4 pb-12 sm:pb-4 flex flex-col gap-3 bg-gray-50 max-h-[85vh] overflow-y-auto">
-              <button
-                disabled={checkingStreak || hasCheckedInToday}
-                onClick={async () => {
-                  if (!userId || hasCheckedInToday) {
-                    return;
-                  }
-                  setCheckingStreak(true);
-                  try {
-                    const supabase = sbRef.current;
-                    const { data: myStreak } = await supabase.from("streaks").select("*").eq("user_id", userId).is("community_id", communityId || null).maybeSingle();
-                    
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    let newDays = 1;
-                    let newMax = 1;
-
-                    if (myStreak && myStreak.last_checkin) {
-                      newMax = myStreak.max_streak;
-                      const last = new Date(myStreak.last_checkin);
-                      last.setHours(0, 0, 0, 0);
-                      const diffTime = today.getTime() - last.getTime();
-                      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-                      if (diffDays === 0) {
-                        setInlinePostContent(`🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${myStreak.streak_days} días (Récord: ${myStreak.max_streak} días) 🔥\n\n`);
-                        setShowPostSheet(false);
-                        setCheckingStreak(false);
-                        setTimeout(() => document.getElementById("inline-real-content")?.focus(), 100);
-                        return;
-                      } else if (diffDays === 1) {
-                        newDays = myStreak.streak_days + 1;
-                      } else {
-                        const daysMissed = diffDays - 1;
-                        const { data: prof } = await supabase.from('profiles').select('streak_protectors').eq('id', userId).single();
-                        const protectors = prof?.streak_protectors || 0;
-                        if (protectors >= daysMissed) {
-                           newDays = myStreak.streak_days + 1;
-                        } else {
-                           newDays = 1;
-                        }
-                      }
-                    }
-
-                    const newMaxStreak = Math.max(newMax, newDays);
-                    
-                    setInlinePostContent(`🎯 ¡Acabo de registrar mi misión del día! Racha actual: ${newDays} días (Récord: ${newMaxStreak} días) 🔥\n\nEscribe tu misión aquí: `);
-                    setIsComposing(true);
-                    setIsStreakMode(true);
-                    setShowPostSheet(false);
-                    setTimeout(() => {
-                      const txt = document.getElementById("inline-real-content") as HTMLTextAreaElement;
-                      if (txt) {
-                        txt.focus();
-                        txt.setSelectionRange(txt.value.length, txt.value.length);
-                      }
-                    }, 100);
-
-                  } catch (err) {
-                    console.error("Error al validar racha", err);
-                  }
-                  setCheckingStreak(false);
-                }}
-                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between group transition-all ${
-                  checkingStreak 
-                    ? "opacity-50 cursor-not-allowed bg-gray-100 border-gray-200" 
-                    : hasCheckedInToday
-                      ? "bg-emerald-50 border-emerald-200 cursor-not-allowed opacity-90"
-                      : "bg-white border-gold/30 shadow-sm hover:shadow-md hover:border-gold hover:bg-gold/5 active:scale-[0.98]"
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-inner flex-shrink-0 ${hasCheckedInToday ? 'bg-emerald-500' : 'bg-gradient-to-tr from-orange-400 to-amber-500'}`}>
-                    {checkingStreak ? <Loader2 size={24} className="animate-spin text-white" /> : <Flame size={24} fill="currentColor" />}
-                  </div>
-                  <div>
-                    <h4 className={`font-serif font-bold text-lg ${hasCheckedInToday ? 'text-emerald-800' : 'text-navy-dark'}`}>
-                       {hasCheckedInToday ? "Misión Completada" : "Registrar Misión y Racha"}
-                    </h4>
-                    <p className={`font-sans text-xs mt-0.5 ${hasCheckedInToday ? 'text-emerald-700' : 'text-navy-dark/60'}`}>
-                       {hasCheckedInToday ? "¡Ya sumaste tus puntos de hoy! 🎉" : "Recibirás puntos y actualizarás tus días"}
-                    </p>
-                  </div>
-                </div>
-                {!hasCheckedInToday && <ChevronRight className="text-gray-300 group-hover:text-gold transition-colors" />}
-              </button>
-
-              <button
-                disabled={checkingStreak}
-                onClick={() => {
-                   setInlinePostContent("");
-                   setIsComposing(true);
-                   setShowPostSheet(false);
-                   setTimeout(() => document.getElementById("inline-real-content")?.focus(), 100);
-                }}
-                className={`w-full p-4 rounded-2xl bg-white border border-gray-200 shadow-sm text-left flex items-center justify-between group transition-all ${checkingStreak ? 'opacity-50 pointer-events-none' : 'hover:border-navy-dark/30 hover:bg-gray-50 active:scale-[0.98]'}`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-navy-dark/60 flex-shrink-0 group-hover:bg-navy-dark/5">
-                    <Pen size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-serif font-bold text-navy-dark text-lg">Publicar Otra Cosa</h4>
-                    <p className="font-sans text-xs text-navy-dark/60 mt-0.5">Un pensamiento, testimonio o idea libre</p>
-                  </div>
-                </div>
-                <ChevronRight className="text-gray-300 group-hover:text-navy-dark transition-colors" />
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </section>
   );
 }
