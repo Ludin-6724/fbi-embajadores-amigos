@@ -598,8 +598,16 @@ export default function Comunidad({
     }
   };
 
-  const emojiMap: Record<string, string> = { like: "👍", heart: "❤️", haha: "😂", amen: "🙏", pray: "🙌" };
-  const labelMap: Record<string, string> = { like: "Me gusta", heart: "Me encanta", haha: "Me divierte", amen: "Amén", pray: "Oración" };
+  const emojiMap: Record<string, string> = {
+    like: "👍", heart: "❤️", haha: "😂", amen: "🙏",
+    celebrate: "🎉", sad: "😢",
+    pray: "🙏", // legado: reacciones antiguas con manos en oración
+  };
+  const labelMap: Record<string, string> = {
+    like: "Me gusta", heart: "Me encanta", haha: "Me divierte", amen: "Amén",
+    celebrate: "Felicidades", sad: "Triste",
+    pray: "Amén",
+  };
 
   const timeAgo = (d: string) => {
     const diff = Date.now() - new Date(d).getTime();

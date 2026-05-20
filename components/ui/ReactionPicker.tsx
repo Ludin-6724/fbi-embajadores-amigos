@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 
-export type ReactionType = "like" | "heart" | "haha" | "amen" | "pray";
+export type ReactionType = "like" | "heart" | "haha" | "amen" | "celebrate" | "sad";
 
 interface ReactionPickerProps {
   onSelect: (reaction: ReactionType) => void;
@@ -14,11 +14,12 @@ interface ReactionPickerProps {
 }
 
 const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
-  { type: "like",  emoji: "👍", label: "Me gusta" },
-  { type: "heart", emoji: "❤️", label: "Me encanta" },
-  { type: "haha",  emoji: "😂", label: "Me divierte" },
-  { type: "amen",  emoji: "🙏", label: "Amén" },
-  { type: "pray",  emoji: "🙌", label: "Oración" },
+  { type: "like",      emoji: "👍", label: "Me gusta" },
+  { type: "heart",     emoji: "❤️", label: "Me encanta" },
+  { type: "haha",      emoji: "😂", label: "Me divierte" },
+  { type: "amen",      emoji: "🙏", label: "Amén" },
+  { type: "celebrate", emoji: "🎉", label: "Felicidades" },
+  { type: "sad",       emoji: "😢", label: "Triste" },
 ];
 
 export default function ReactionPicker({
@@ -44,7 +45,7 @@ export default function ReactionPicker({
   const openMenu = useCallback(() => {
     if (disabled || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const menuW = 300;
+    const menuW = 360;
     let left = rect.left + rect.width / 2 - menuW / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - menuW - 8));
     const top = Math.max(8, rect.top - 76);
