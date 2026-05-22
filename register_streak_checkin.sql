@@ -13,7 +13,8 @@ AS $$
 DECLARE
   v_user_id uuid;
   v_today date;
-  v_last_checkin date;
+  v_last_checkin timestamptz;
+  v_last_checkin_date date;
   v_diff_days int;
   v_days_missed int;
   v_old_days int := 0;
@@ -62,8 +63,8 @@ BEGIN
   LIMIT 1;
 
   IF v_streak_id IS NOT NULL AND v_last_checkin IS NOT NULL THEN
-    v_last_checkin := (v_last_checkin AT TIME ZONE 'America/Mexico_City')::date;
-    v_diff_days := v_today - v_last_checkin;
+    v_last_checkin_date := (v_last_checkin AT TIME ZONE 'America/Mexico_City')::date;
+    v_diff_days := v_today - v_last_checkin_date;
 
     IF v_diff_days = 0 THEN
       v_same_day := true;

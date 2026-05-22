@@ -39,6 +39,7 @@ BEGIN
 END;
 $$;
 
+
 -- RPC para consumir un protector
 CREATE OR REPLACE FUNCTION consume_protector(user_id uuid)
 RETURNS boolean
