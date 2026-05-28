@@ -10,6 +10,7 @@ import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
 import BottomNavbar, { TabType } from "@/components/ui/BottomNavbar";
 import ProfileSection from "@/components/sections/ProfileSection";
+import MenuSection from "@/components/sections/MenuSection";
 import UpdatePrompt from "@/components/ui/UpdatePrompt";
 import { createClient } from "@/lib/supabase/client";
 
@@ -22,7 +23,7 @@ export default function HomeClient({ initialUser, initialProfile, initialPosts =
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as TabType;
-    const validTabs: TabType[] = ["feed", "prayers", "streaks", "shop", "profile"];
+    const validTabs: TabType[] = ["feed", "prayers", "streaks", "shop", "menu", "profile"];
     if (hash && validTabs.includes(hash)) {
       setActiveTab(hash);
       setVisitedTabs(prev => new Set([...prev, hash]));
@@ -112,6 +113,10 @@ export default function HomeClient({ initialUser, initialProfile, initialPosts =
 
         <div style={{ display: activeTab === "shop" ? "block" : "none" }}>
           <Tienda profile={initialProfile} isAllowedToFetch={visitedTabs.has("shop") && activeTab === "shop"} />
+        </div>
+
+        <div style={{ display: activeTab === "menu" ? "block" : "none" }}>
+          <MenuSection profile={initialProfile} isAllowedToFetch={visitedTabs.has("menu") && activeTab === "menu"} />
         </div>
 
         <div style={{ display: activeTab === "profile" ? "block" : "none" }}>

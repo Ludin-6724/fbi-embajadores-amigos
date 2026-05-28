@@ -1,5 +1,8 @@
 -- Atomic streak check-in: streak row + points + wall post (America/Mexico_City)
 -- Run in Supabase SQL Editor before deploying the client that calls register_streak_checkin
+--
+-- IMPORTANT: Los protectores de racha son manejados EXCLUSIVAMENTE por el cron
+-- process_daily_streaks. Esta función NUNCA consume protectores.
 
 CREATE OR REPLACE FUNCTION public.register_streak_checkin(
   p_mission_note text,
@@ -16,15 +19,10 @@ DECLARE
   v_last_checkin timestamptz;
   v_last_checkin_date date;
   v_diff_days int;
-  v_days_missed int;
   v_old_days int := 0;
   v_new_days int := 1;
   v_max_streak int := 0;
-  v_protectors int;
-  v_consumed int;
-  v_i int;
   v_streak_id uuid;
-  v_protector_used boolean := false;
   v_same_day boolean := false;
   v_post_created boolean := false;
   v_points_awarded int := 0;
@@ -72,27 +70,10 @@ BEGIN
     ELSIF v_diff_days = 1 THEN
       v_new_days := v_old_days + 1;
     ELSE
-      v_days_missed := v_diff_days - 1;
-      SELECT COALESCE(streak_protectors, 0) INTO v_protectors
-      FROM public.profiles WHERE id = v_user_id;
-
-      IF v_protectors >= v_days_missed THEN
-        v_consumed := 0;
-        FOR v_i IN 1..v_days_missed LOOP
-          IF public.consume_protector(v_user_id) THEN
-            v_consumed := v_consumed + 1;
-          END IF;
-        END LOOP;
-
-        IF v_consumed = v_days_missed THEN
-          v_new_days := v_old_days + v_days_missed + 1;
-          v_protector_used := true;
-        ELSE
-          v_new_days := 1;
-        END IF;
-      ELSE
-        v_new_days := 1;
-      END IF;
+      -- Si pasaron 2+ días, la racha se reinicia a 1.
+      -- Los protectores son manejados EXCLUSIVAMENTE por el cron process_daily_streaks.
+      -- Si el cron ya salvó la racha, last_checkin estará actualizado y v_diff_days será 1.
+      v_new_days := 1;
     END IF;
   END IF;
 
@@ -123,37 +104,19 @@ BEGIN
   END IF;
 
   IF NOT v_same_day THEN
-    IF v_protector_used THEN
-      v_post_content := format(
-        '🎯 ¡Acabo de registrar mi misión del día! Racha actual: %s días (Récord: %s días) 🛡️🔥%s%s',
-        v_new_days, v_max_streak, E'\n\n', '"' || trim(p_mission_note) || '"'
-      );
-    ELSE
-      v_post_content := format(
-        '🎯 ¡Acabo de registrar mi misión del día! Racha actual: %s días (Récord: %s días) 🔥%s%s',
-        v_new_days, v_max_streak, E'\n\n', '"' || trim(p_mission_note) || '"'
-      );
-    END IF;
+    v_post_content := format(
+      '🎯 ¡Acabo de registrar mi misión del día! Racha actual: %s días (Récord: %s días) 🔥%s%s',
+      v_new_days, v_max_streak, E'\n\n', '"' || trim(p_mission_note) || '"'
+    );
 
     INSERT INTO public.posts (author_id, content, is_anonymous, community_id)
     VALUES (v_user_id, v_post_content, false, p_community_id);
 
     v_post_created := true;
-
-    IF v_protector_used THEN
-      INSERT INTO public.notifications (user_id, actor_id, type, message, link)
-      VALUES (
-        v_user_id, v_user_id, 'protector_used',
-        format('🛡️ Tu protector salvó tu racha. Cubrió %s día(s) de ausencia. ¡Sigue sin fallar!', v_days_missed),
-        '#rachas'
-      );
-    END IF;
   END IF;
 
   IF v_same_day THEN
     v_message := 'Ya registraste tu misión de hoy. Actualizamos tu nota.';
-  ELSIF v_protector_used THEN
-    v_message := format('¡Misión registrada! Tu(s) protector(es) salvaron %s día(s). Ganaste %s 🪙.', v_days_missed, v_points_awarded);
   ELSIF v_new_days = 1 AND v_old_days > 1 THEN
     v_message := 'Tu racha se reinició. ¡Vamos de nuevo! 💪';
   ELSIF v_points_awarded > 0 THEN
@@ -169,7 +132,7 @@ BEGIN
     'points_awarded', v_points_awarded,
     'post_created', v_post_created,
     'same_day_update', v_same_day,
-    'protector_used', v_protector_used,
+    'protector_used', false,
     'message', v_message
   );
 

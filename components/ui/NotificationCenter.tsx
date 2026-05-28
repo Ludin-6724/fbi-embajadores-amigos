@@ -5,11 +5,11 @@ import { Bell, Check, ExternalLink, Trash2, Loader2, MessageSquare, Heart, Shiel
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
-import { Flame, Smartphone } from "lucide-react";
+import { Flame, Smartphone, Sparkles } from "lucide-react";
 
 type Notification = {
   id: string;
-  type: 'reaction' | 'comment' | 'community_approved' | 'cheer';
+  type: 'reaction' | 'comment' | 'community_approved' | 'cheer' | 'habit_complete';
   message: string;
   link: string | null;
   is_read: boolean;
@@ -292,6 +292,7 @@ export default function NotificationCenter({ userId }: { userId?: string }) {
       case 'comment': return <MessageSquare size={14} className="text-gold" />;
       case 'community_approved': return <ShieldCheck size={14} className="text-green-500" />;
       case 'cheer': return <Flame size={14} className="text-orange-500 fill-orange-500/20" />;
+      case 'habit_complete': return <Sparkles size={14} className="text-emerald-500" />;
       default: return <Bell size={14} className="text-navy-dark/40" />;
     }
   };
