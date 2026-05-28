@@ -235,6 +235,20 @@ BEGIN
   SELECT COALESCE(full_name, username, 'Un agente') INTO v_user_name
   FROM public.profiles WHERE id = v_user_id;
 
+  -- Auto-publicar en el muro de comunidad de forma atómica
+  INSERT INTO public.posts (author_id, content, is_anonymous)
+  VALUES (
+    v_user_id,
+    '🎯 [HABIT_COMPLETE]:' || jsonb_build_object(
+      'user_name', v_user_name,
+      'category', v_habit.category,
+      'icon', v_habit.icon,
+      'color', v_habit.color,
+      'streak', v_new_streak
+    )::text,
+    false
+  );
+
   -- Insertar notificación para TODOS los demás usuarios (batch, max 200)
   INSERT INTO public.notifications (user_id, actor_id, type, message, link)
   SELECT p.id, v_user_id, 'habit_complete',

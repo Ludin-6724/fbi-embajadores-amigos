@@ -3,7 +3,7 @@
    Ejecutar en: Supabase Dashboard > SQL Editor
    ============================================================ */
 
--- 1. Actualizar la función trigger para soportar mensajes de ánimo de hábitos personalizados
+-- 1. Actualizar la función trigger para soportar mensajes de ánimo de hábitos y notificaciones globales
 CREATE OR REPLACE FUNCTION public.handle_new_notification()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -11,14 +11,25 @@ DECLARE
   actor_name text;
   post_snippet text;
   comm_name text;
+  actor_id_val uuid;
 BEGIN
+    -- Determinar el ID del actor según la tabla
+    IF (TG_TABLE_NAME = 'post_reactions') THEN actor_id_val := NEW.user_id;
+    ELSIF (TG_TABLE_NAME = 'comments') THEN actor_id_val := NEW.author_id;
+    ELSIF (TG_TABLE_NAME = 'community_join_requests') THEN actor_id_val := NEW.user_id;
+    ELSIF (TG_TABLE_NAME = 'posts') THEN actor_id_val := NEW.author_id;
+    END IF;
+
+    IF actor_id_val IS NULL THEN RETURN NEW; END IF;
+
     -- Obtener nombre del actor (quien realiza la acción)
     SELECT COALESCE(username, full_name, 'Un agente') INTO actor_name 
-    FROM public.profiles WHERE id = NEW.user_id OR id = (CASE 
-        WHEN TG_TABLE_NAME = 'post_reactions' THEN NEW.user_id 
-        WHEN TG_TABLE_NAME = 'comments' THEN NEW.author_id 
-        ELSE NEW.user_id 
-    END);
+    FROM public.profiles WHERE id = actor_id_val;
+
+    -- Anonimato
+    IF (TG_TABLE_NAME IN ('comments', 'posts') AND NEW.is_anonymous = true) THEN
+        actor_name := 'Agente Anónimo';
+    END IF;
 
     -- Lógica según la tabla que dispara el trigger
     IF (TG_TABLE_NAME = 'post_reactions') THEN
@@ -45,6 +56,18 @@ BEGIN
         INSERT INTO public.notifications (user_id, actor_id, type, message, link)
         VALUES (target_user_id, NEW.author_id, 'comment', actor_name || ' comentó en tu publicación: "' || post_snippet || '..."', '#post-' || NEW.post_id);
 
+    ELSIF (TG_TABLE_NAME = 'posts') THEN
+        -- Cuando se publica un nuevo post global
+        IF (NEW.community_id IS NULL) THEN
+            IF (NEW.content LIKE '🎯 [HABIT_COMPLETE]%') THEN
+                INSERT INTO public.notifications (user_id, actor_id, type, message, link)
+                VALUES (NULL, NEW.author_id, 'global_post', actor_name || ' ha completado un hábito personal, ¡anímalo a seguir! 💪', '/post/' || NEW.id);
+            ELSE
+                INSERT INTO public.notifications (user_id, actor_id, type, message, link)
+                VALUES (NULL, NEW.author_id, 'global_post', actor_name || ' ha publicado algo en el Muro.', '/post/' || NEW.id);
+            END IF;
+        END IF;
+
     ELSIF (TG_TABLE_NAME = 'community_join_requests') THEN
         -- Solo notificar si pasa a 'approved'
         IF (NEW.status = 'approved' AND OLD.status = 'pending') THEN
@@ -58,3 +81,19 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Asegurar que los triggers están activos
+DROP TRIGGER IF EXISTS on_global_post ON public.posts;
+CREATE TRIGGER on_global_post
+  AFTER INSERT ON public.posts
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();
+
+DROP TRIGGER IF EXISTS on_post_reaction ON public.post_reactions;
+CREATE TRIGGER on_post_reaction
+  AFTER INSERT ON public.post_reactions
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();
+
+DROP TRIGGER IF EXISTS on_post_comment ON public.comments;
+CREATE TRIGGER on_post_comment
+  AFTER INSERT ON public.comments
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();

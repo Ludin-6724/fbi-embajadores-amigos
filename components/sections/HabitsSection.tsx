@@ -159,6 +159,7 @@ export default function HabitsSection({
   const [streaks, setStreaks] = useState<HabitStreak[]>([]);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<string | null>(null);
+  const [optimisticCompletedIds, setOptimisticCompletedIds] = useState<Set<string>>(new Set());
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [myPoints, setMyPoints] = useState(profile?.points || 0);
 
@@ -190,7 +191,10 @@ export default function HabitsSection({
       ]);
 
       if (habitsRes.data) setHabits(habitsRes.data as Habit[]);
-      if (logsRes.data) setLogs(logsRes.data as HabitLog[]);
+      if (logsRes.data) {
+        setLogs(logsRes.data as HabitLog[]);
+        setOptimisticCompletedIds(new Set()); // Reset optimistic state on real fetch
+      }
       if (streaksRes.data) setStreaks(streaksRes.data as HabitStreak[]);
     } catch (err) {
       console.error("Error fetching habits:", err);
@@ -222,8 +226,8 @@ export default function HabitsSection({
   }, [logs, today]);
 
   const completedCount = useMemo(
-    () => todayHabits.filter(h => todayCompletedIds.has(h.id)).length,
-    [todayHabits, todayCompletedIds]
+    () => todayHabits.filter(h => todayCompletedIds.has(h.id) || optimisticCompletedIds.has(h.id)).length,
+    [todayHabits, todayCompletedIds, optimisticCompletedIds]
   );
 
   const progress = todayHabits.length > 0 ? Math.round((completedCount / todayHabits.length) * 100) : 0;
@@ -259,75 +263,78 @@ export default function HabitsSection({
   // ─── Complete habit ────────────────────────────────────────
   const handleComplete = async (habit: Habit, value?: number, note?: string) => {
     if (!userId || completing) return;
+
+    // Lock: Solo permitir registrar una vez al día
+    const isAlreadyDone = todayCompletedIds.has(habit.id) || optimisticCompletedIds.has(habit.id);
+    if (isAlreadyDone) return;
+
+    // 1. Actualización optimista de interfaz
+    setOptimisticCompletedIds(prev => {
+      const next = new Set(prev);
+      next.add(habit.id);
+      return next;
+    });
+
+    // Confeti instantáneo para una respuesta háptica e inmediata
+    const newCompletedCount = completedCount + 1;
+    if (newCompletedCount >= todayHabits.length && todayHabits.length > 1) {
+      confetti({
+        particleCount: 200,
+        spread: 100,
+        origin: { y: 0.5 },
+        colors: ["#D4A017", "#FF4500", "#FFA500", "#10B981", "#3B82F6"],
+      });
+    } else {
+      confetti({
+        particleCount: 40,
+        spread: 50,
+        origin: { y: 0.7 },
+        colors: [habit.color, "#D4A017"],
+      });
+    }
+
     setCompleting(habit.id);
 
-    try {
-      const { data, error } = await supabase.rpc("complete_habit", {
-        p_habit_id: habit.id,
-        p_value: value ?? null,
-        p_note: note ?? null,
-        p_mood: null,
-      });
-
-      if (error) throw error;
-
-      const result = data as any;
-      if (!result?.ok) {
-        setStatusMsg({ text: result?.message || "Error al completar hábito", type: "error" });
-        return;
-      }
-
-      setStatusMsg({ text: result.message, type: "success" });
-
-      if (result.points_awarded) {
-        setMyPoints((p: number) => p + result.points_awarded);
-      }
-
-      // Auto-publicar en el muro de comunidad si es completado por primera vez hoy
-      if (result?.ok && !result?.already_logged) {
-        const uName = profile?.full_name || profile?.username || "Un agente";
-        const streakVal = result.streak || 1;
-        
-        const postContent = `🎯 [HABIT_COMPLETE]:${JSON.stringify({
-          user_name: uName,
-          category: habit.category,
-          icon: habit.icon,
-          color: habit.color,
-          streak: streakVal
-        })}`;
-        
-        // Insertar en la tabla de posts de forma pública
-        await supabase.from("posts").insert({
-          author_id: userId,
-          content: postContent,
-          is_anonymous: false
+    // 2. Operación de base de datos en segundo plano
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc("complete_habit", {
+          p_habit_id: habit.id,
+          p_value: value ?? null,
+          p_note: note ?? null,
+          p_mood: null,
         });
-      }
 
-      // Check if all habits completed → big confetti
-      const newCompletedCount = completedCount + 1;
-      if (newCompletedCount >= todayHabits.length && todayHabits.length > 1) {
-        confetti({
-          particleCount: 200,
-          spread: 100,
-          origin: { y: 0.5 },
-          colors: ["#D4A017", "#FF4500", "#FFA500", "#10B981", "#3B82F6"],
-        });
-      } else {
-        confetti({
-          particleCount: 40,
-          spread: 50,
-          origin: { y: 0.7 },
-          colors: [habit.color, "#D4A017"],
-        });
-      }
+        if (error) throw error;
 
-      await fetchAll();
-    } catch (err: any) {
-      setStatusMsg({ text: `Error: ${err.message}`, type: "error" });
-    } finally {
-      setCompleting(null);
-    }
+        const result = data as any;
+        if (!result?.ok) {
+          throw new Error(result?.message || "Error al completar hábito");
+        }
+
+        setStatusMsg({ text: result.message, type: "success" });
+
+        if (result.points_awarded) {
+          setMyPoints((p: number) => p + result.points_awarded);
+        }
+
+        // La publicación en el muro ahora se maneja de forma atómica en el servidor (RPC complete_habit)
+
+        // Actualizar datos reales de fondo
+        await fetchAll();
+      } catch (err: any) {
+        console.error("Error en complete_habit asíncrono:", err);
+        // Revertir estado optimista si algo sale mal (ej: falta ejecutar SQL)
+        setOptimisticCompletedIds(prev => {
+          const next = new Set(prev);
+          next.delete(habit.id);
+          return next;
+        });
+        setStatusMsg({ text: `Error: ${err.message}`, type: "error" });
+      } finally {
+        setCompleting(null);
+      }
+    })();
   };
 
   // ─── Uncomplete habit ──────────────────────────────────────
@@ -374,6 +381,7 @@ export default function HabitsSection({
     );
     const weeklyRate = last7.filter(d => completedDates.has(d)).length;
     const monthlyRate = last30.filter(d => completedDates.has(d)).length;
+    const isCompletedToday = todayCompletedIds.has(detailHabit.id) || optimisticCompletedIds.has(detailHabit.id);
 
     return (
       <section className="py-10 bg-white min-h-[60vh]">
@@ -462,6 +470,29 @@ export default function HabitsSection({
                 </p>
                 <p className="text-[10px] font-black text-navy-dark/50 uppercase tracking-wider mt-1.5">Total Hecho</p>
               </div>
+            </div>
+
+            {/* Registrar Hábito Hoy (Botón destacado dentro del detalle) */}
+            <div className="mt-5">
+              {isCompletedToday ? (
+                <div className="w-full py-4 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-center justify-center gap-2 text-green-700 font-sans font-bold text-sm shadow-inner">
+                  <Check size={18} className="stroke-[3]" />
+                  Hábito Registrado Hoy (+5 🪙)
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleComplete(detailHabit)}
+                  disabled={completing === detailHabit.id}
+                  className="w-full py-4 bg-gold hover:bg-gold/90 text-white rounded-2xl font-sans font-bold text-sm shadow-lg shadow-gold/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                >
+                  {completing === detailHabit.id ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={18} className="animate-pulse" />
+                  )}
+                  Registrar Hábito Hoy (+5 🪙)
+                </button>
+              )}
             </div>
           </div>
 
@@ -805,7 +836,7 @@ export default function HabitsSection({
           /* Habit cards — streamlined */
           <div className="space-y-2.5">
             {todayHabits.map((habit) => {
-              const isCompleted = todayCompletedIds.has(habit.id);
+              const isCompleted = todayCompletedIds.has(habit.id) || optimisticCompletedIds.has(habit.id);
               const streak = getStreak(habit.id);
               const isLoading = completing === habit.id;
               const isQuantity = habit.habit_type === "quantity";
@@ -837,8 +868,10 @@ export default function HabitsSection({
                      <button
                       onClick={() => {
                         if (isCompleted) {
-                          handleUncomplete(habit.id);
-                        } else if (isQuantity || isDuration) {
+                          // Bloqueado: registrar hábito solo una vez al día
+                          return;
+                        }
+                        if (isQuantity || isDuration) {
                           const inputVal = parseFloat(quantityInputs[habit.id] || "");
                           const val = !isNaN(inputVal) && inputVal > 0 ? inputVal : habit.target_value;
                           handleComplete(habit, val);
@@ -847,18 +880,18 @@ export default function HabitsSection({
                           handleComplete(habit);
                         }
                       }}
-                      disabled={isLoading}
+                      disabled={isLoading || isCompleted}
                       className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
                         isCompleted
-                          ? "bg-green-500 text-white shadow-sm"
+                          ? "bg-green-500 text-white shadow-sm cursor-default"
                           : "border-2 border-light-gray hover:border-gold hover:bg-gold/5 text-navy-dark/20 hover:text-gold"
                       } ${isLoading ? "animate-pulse" : ""}`}
                       style={!isCompleted ? { borderColor: habit.color + "30" } : undefined}
                     >
-                      {isLoading ? (
-                        <Loader2 size={18} className="animate-spin" />
-                      ) : isCompleted ? (
+                      {isCompleted ? (
                         <Check size={18} strokeWidth={3} />
+                      ) : isLoading ? (
+                        <Loader2 size={18} className="animate-spin" />
                       ) : (
                         <Check size={18} className="text-navy-dark/15 group-hover:text-gold transition-all stroke-[2.5]" />
                       )}
