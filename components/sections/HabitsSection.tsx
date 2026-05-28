@@ -402,17 +402,44 @@ export default function HabitsSection({
 
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 mt-4">
-              <div className="bg-white rounded-2xl p-4 text-center border border-light-gray">
-                <p className="text-2xl font-black text-navy-dark font-sans">{streak?.current_streak || 0}</p>
-                <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-wider mt-1">Racha</p>
+              <div
+                className="rounded-2xl p-4 text-center border transition-all"
+                style={{
+                  background: `linear-gradient(135deg, ${detailHabit.color}10, ${detailHabit.color}03)`,
+                  borderColor: detailHabit.color + "25",
+                }}
+              >
+                <p className="text-3xl font-black font-sans flex items-center justify-center gap-1" style={{ color: detailHabit.color }}>
+                  {streak?.current_streak || 0}
+                  <Flame size={18} className="fill-current animate-pulse" />
+                </p>
+                <p className="text-[10px] font-black text-navy-dark/50 uppercase tracking-wider mt-1.5">Racha Actual</p>
               </div>
-              <div className="bg-white rounded-2xl p-4 text-center border border-light-gray">
-                <p className="text-2xl font-black text-gold font-sans">{streak?.max_streak || 0}</p>
-                <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-wider mt-1">Récord</p>
+              <div
+                className="rounded-2xl p-4 text-center border transition-all"
+                style={{
+                  background: `linear-gradient(135deg, ${detailHabit.color}15, ${detailHabit.color}05)`,
+                  borderColor: detailHabit.color + "30",
+                }}
+              >
+                <p className="text-3xl font-black font-sans text-gold flex items-center justify-center gap-1">
+                  {streak?.max_streak || 0}
+                  <Award size={18} className="fill-current" />
+                </p>
+                <p className="text-[10px] font-black text-navy-dark/50 uppercase tracking-wider mt-1.5">Récord Max</p>
               </div>
-              <div className="bg-white rounded-2xl p-4 text-center border border-light-gray">
-                <p className="text-2xl font-black text-navy-dark font-sans">{streak?.total_completions || 0}</p>
-                <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-wider mt-1">Total</p>
+              <div
+                className="rounded-2xl p-4 text-center border transition-all"
+                style={{
+                  background: `linear-gradient(135deg, ${detailHabit.color}10, ${detailHabit.color}03)`,
+                  borderColor: detailHabit.color + "25",
+                }}
+              >
+                <p className="text-3xl font-black text-navy-dark font-sans flex items-center justify-center gap-1">
+                  {streak?.total_completions || 0}
+                  <Check size={18} className="stroke-[3]" />
+                </p>
+                <p className="text-[10px] font-black text-navy-dark/50 uppercase tracking-wider mt-1.5">Total Hecho</p>
               </div>
             </div>
           </div>
@@ -451,55 +478,35 @@ export default function HabitsSection({
 
           {/* Weekly & Monthly rates */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-cream/40 rounded-3xl p-5 border border-light-gray text-center">
-              <TrendingUp size={20} className="text-gold mx-auto mb-2" />
-              <p className="text-3xl font-black text-navy-dark font-sans">
+            <div
+              className="rounded-3xl p-5 border text-center transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${detailHabit.color}08, ${detailHabit.color}02)`,
+                borderColor: detailHabit.color + "20",
+              }}
+            >
+              <TrendingUp size={22} style={{ color: detailHabit.color }} className="mx-auto mb-2" />
+              <p className="text-4xl font-black font-sans" style={{ color: detailHabit.color }}>
                 {Math.round((weeklyRate / 7) * 100)}%
               </p>
-              <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-wider mt-1">
-                Esta semana
+              <p className="text-[10px] font-black text-navy-dark/50 uppercase tracking-wider mt-1.5">
+                Éxito Semanal
               </p>
             </div>
-            <div className="bg-cream/40 rounded-3xl p-5 border border-light-gray text-center">
-              <BarChart3 size={20} className="text-gold mx-auto mb-2" />
-              <p className="text-3xl font-black text-navy-dark font-sans">
+            <div
+              className="rounded-3xl p-5 border text-center transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${detailHabit.color}08, ${detailHabit.color}02)`,
+                borderColor: detailHabit.color + "20",
+              }}
+            >
+              <BarChart3 size={22} className="text-gold mx-auto mb-2" />
+              <p className="text-4xl font-black text-gold font-sans">
                 {Math.round((monthlyRate / 30) * 100)}%
               </p>
-              <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-wider mt-1">
-                Último mes
+              <p className="text-[10px] font-black text-navy-dark/50 uppercase tracking-wider mt-1.5">
+                Éxito Mensual
               </p>
-            </div>
-          </div>
-
-          {/* Weekly chart */}
-          <div className="bg-cream/40 rounded-3xl p-6 border border-light-gray">
-            <h4 className="font-serif font-bold text-navy-dark mb-4 flex items-center gap-2">
-              <BarChart3 size={18} className="text-gold" />
-              Esta semana
-            </h4>
-            <div className="flex items-end justify-between gap-2 h-32">
-              {last7.map((date) => {
-                const done = completedDates.has(date);
-                const dayLabel = new Date(date + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short" });
-                const isToday = date === today;
-                return (
-                  <div key={date} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="flex-1 w-full flex items-end justify-center">
-                      <div
-                        className={`w-full max-w-[32px] rounded-xl transition-all ${
-                          done ? "min-h-[60%]" : "min-h-[12%] opacity-30"
-                        }`}
-                        style={{ backgroundColor: done ? detailHabit.color : "#e5e5e5" }}
-                      />
-                    </div>
-                    <span className={`text-[10px] font-bold uppercase ${
-                      isToday ? "text-gold" : "text-navy-dark/40"
-                    }`}>
-                      {dayLabel}
-                    </span>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </div>
@@ -551,35 +558,43 @@ export default function HabitsSection({
             >
               {/* ── General Stats Card ── */}
               <div className="snap-center flex-shrink-0 w-full pr-3">
-                <div className="bg-gradient-to-br from-navy-dark to-navy-dark/90 rounded-3xl p-5 text-white shadow-xl relative overflow-hidden">
+                <div
+                  className="rounded-3xl p-5 shadow-lg relative overflow-hidden border"
+                  style={{
+                    background: "linear-gradient(135deg, #D4A01715, #D4A01708)",
+                    borderColor: "#D4A01725",
+                  }}
+                >
                   {/* Decorative */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-                  <div className="absolute bottom-0 left-0 w-20 h-20 bg-gold/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+                  <div className="absolute top-0 right-0 w-24 h-24 rounded-full -translate-y-1/2 translate-x-1/2 bg-gold/10" />
                   
                   <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-8 h-8 bg-gold/20 rounded-xl flex items-center justify-center">
-                        <BarChart3 size={16} className="text-gold" />
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-gold/20 rounded-xl flex items-center justify-center">
+                        <BarChart3 size={18} className="text-gold" />
                       </div>
-                      <span className="text-sm font-bold text-white/80 font-sans">Resumen General</span>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-sans font-bold text-sm text-navy-dark">Resumen General</h4>
+                        <p className="text-[10px] text-navy-dark/50 font-sans">FBI Embajadores</p>
+                      </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
-                        <p className="text-2xl font-black font-sans">{globalStats.weekRate}%</p>
-                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">Semana</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center border border-light-gray/40">
+                        <p className="text-lg font-black text-navy-dark font-sans">{globalStats.weekRate}%</p>
+                        <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Semana</p>
                       </div>
-                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
-                        <p className="text-2xl font-black font-sans">{globalStats.monthRate}%</p>
-                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">Mes</p>
+                      <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center border border-light-gray/40">
+                        <p className="text-lg font-black text-navy-dark font-sans">{globalStats.monthRate}%</p>
+                        <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Mes</p>
                       </div>
-                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
-                        <p className="text-2xl font-black font-sans text-gold">{globalStats.bestStreak}</p>
-                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">Mejor racha</p>
+                      <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center border border-light-gray/40">
+                        <p className="text-lg font-black text-gold font-sans">{globalStats.bestStreak}</p>
+                        <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Racha</p>
                       </div>
-                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
-                        <p className="text-2xl font-black font-sans">{globalStats.totalPointsEarned}</p>
-                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">🪙 Ganados</p>
+                      <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center border border-light-gray/40">
+                        <p className="text-lg font-black text-emerald-600 font-sans">{globalStats.totalPointsEarned}</p>
+                        <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Puntos</p>
                       </div>
                     </div>
                   </div>
@@ -787,35 +802,33 @@ export default function HabitsSection({
                 >
                   <div className="flex items-center gap-3 p-4">
                     {/* Check button */}
-                    <button
+                     <button
                       onClick={() => {
                         if (isCompleted) {
                           handleUncomplete(habit.id);
                         } else if (isQuantity || isDuration) {
-                          // For quantity/duration, need input
-                          const val = parseFloat(quantityInputs[habit.id] || "0");
-                          if (val > 0) {
-                            handleComplete(habit, val);
-                            setQuantityInputs(prev => ({ ...prev, [habit.id]: "" }));
-                          }
+                          const inputVal = parseFloat(quantityInputs[habit.id] || "");
+                          const val = !isNaN(inputVal) && inputVal > 0 ? inputVal : habit.target_value;
+                          handleComplete(habit, val);
+                          setQuantityInputs(prev => ({ ...prev, [habit.id]: "" }));
                         } else {
                           handleComplete(habit);
                         }
                       }}
-                      disabled={isLoading || ((isQuantity || isDuration) && !isCompleted && !parseFloat(quantityInputs[habit.id] || "0"))}
+                      disabled={isLoading}
                       className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
                         isCompleted
                           ? "bg-green-500 text-white shadow-sm"
-                          : "border-2 border-light-gray hover:border-gold text-navy-dark/20 hover:text-gold"
+                          : "border-2 border-light-gray hover:border-gold hover:bg-gold/5 text-navy-dark/20 hover:text-gold"
                       } ${isLoading ? "animate-pulse" : ""}`}
-                      style={!isCompleted ? { borderColor: habit.color + "40" } : undefined}
+                      style={!isCompleted ? { borderColor: habit.color + "30" } : undefined}
                     >
                       {isLoading ? (
                         <Loader2 size={18} className="animate-spin" />
                       ) : isCompleted ? (
                         <Check size={18} strokeWidth={3} />
                       ) : (
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: habit.color + "30" }} />
+                        <Check size={18} className="text-navy-dark/15 group-hover:text-gold transition-all stroke-[2.5]" />
                       )}
                     </button>
 
