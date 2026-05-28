@@ -823,16 +823,16 @@ export default function HabitsSection({
                   style={
                     isCompleted
                       ? {
-                          background: `linear-gradient(135deg, #10B98110, #10B98104)`,
-                          borderColor: "#10B98135",
+                          background: `linear-gradient(135deg, #10B98115, #10B98105)`,
+                          borderColor: "#10B98140",
                         }
                       : {
-                          background: `linear-gradient(135deg, ${habit.color}08, ${habit.color}02)`,
-                          borderColor: habit.color + "20",
+                          background: `linear-gradient(135deg, ${habit.color}15, ${habit.color}08)`,
+                          borderColor: habit.color + "25",
                         }
                   }
                 >
-                  <div className="flex items-center gap-3 p-4">
+                  <div className="flex items-center gap-3.5 p-4">
                     {/* Check button */}
                      <button
                       onClick={() => {
@@ -864,13 +864,22 @@ export default function HabitsSection({
                       )}
                     </button>
 
+                    {/* Highlighted Category Icon Box (Just like per-habit stats slides) */}
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm flex-shrink-0"
+                      style={{
+                        backgroundColor: isCompleted ? "#10B98120" : habit.color + "20",
+                      }}
+                    >
+                      {habit.icon}
+                    </div>
+
                     {/* Habit info */}
                     <button
                       onClick={() => setDetailHabit(habit)}
                       className="flex-1 text-left min-w-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-base">{habit.icon}</span>
                         <h4 className={`font-sans font-bold text-sm truncate ${
                           isCompleted ? "text-green-700 line-through opacity-70" : "text-navy-dark"
                         }`}>
@@ -891,8 +900,8 @@ export default function HabitsSection({
 
                     {/* Streak badge */}
                     {(streak?.current_streak || 0) > 0 && (
-                      <div className="flex items-center gap-1 px-2 py-1 bg-gold/10 rounded-lg flex-shrink-0">
-                        <Flame size={12} className="text-gold fill-gold" />
+                      <div className="flex items-center gap-1 px-2.5 py-1 bg-gold/10 rounded-lg flex-shrink-0 border border-gold/10">
+                        <Flame size={12} className="text-gold fill-gold animate-pulse" />
                         <span className="text-xs font-black text-gold font-sans">{streak?.current_streak}</span>
                       </div>
                     )}
