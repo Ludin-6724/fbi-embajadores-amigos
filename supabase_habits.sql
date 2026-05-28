@@ -239,7 +239,7 @@ BEGIN
   INSERT INTO public.notifications (user_id, actor_id, type, message, link)
   SELECT p.id, v_user_id, 'habit_complete',
     v_user_name || ' ha completado un hábito personal, ¡anímalo a seguir! 💪',
-    '#menu'
+    '#habits'
   FROM public.profiles p
   WHERE p.id != v_user_id
   LIMIT 200;

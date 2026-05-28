@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Target, Plus, Check, X, Loader2, Flame, Sparkles,
   Pencil, Archive, Trash2, ChevronLeft, ChevronRight,
   Clock, Sun, Sunset, Moon as MoonIcon, BarChart3,
   Calendar as CalendarIcon, TrendingUp, Award, Hash,
-  Timer, Ban, CircleCheck,
+  Timer, Ban, CircleCheck, Zap, Star,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import confetti from "canvas-confetti";
@@ -68,8 +68,8 @@ const CATEGORIES: { id: HabitCategory; label: string; icon: string }[] = [
 const HABIT_TYPES: { id: HabitType; label: string; desc: string; icon: typeof Check }[] = [
   { id: "boolean", label: "Sí / No", desc: "Marca como hecho", icon: CircleCheck },
   { id: "quantity", label: "Cantidad", desc: "Ej: 8 vasos de agua", icon: Hash },
-  { id: "duration", label: "Duración", desc: "Ej: 10 minutos", icon: Timer },
-  { id: "negative", label: "Negativo", desc: "Ej: No fumar", icon: Ban },
+  { id: "duration", label: "Duración", desc: "Ej: 30 minutos", icon: Timer },
+  { id: "negative", label: "Evitar", desc: "Ej: Evitar quejas", icon: Ban },
 ];
 
 const TIME_OPTIONS: { id: TimeOfDay; label: string; icon: typeof Sun; emoji: string }[] = [
@@ -172,6 +172,10 @@ export default function HabitsSection({
   // Quantity input tracking
   const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>({});
 
+  // Stats carousel
+  const [statsSlide, setStatsSlide] = useState(0); // 0 = general, 1+ = per-habit
+  const statsScrollRef = useRef<HTMLDivElement>(null);
+
   const today = getTodayMexico();
 
   // ─── Fetch data ────────────────────────────────────────────
@@ -226,6 +230,31 @@ export default function HabitsSection({
 
   const getStreak = (habitId: string) => streaks.find(s => s.habit_id === habitId);
   const getLogForDate = (habitId: string, date: string) => logs.find(l => l.habit_id === habitId && l.logged_date === date);
+
+  // ─── Global stats (real data) ──────────────────────────────
+  const globalStats = useMemo(() => {
+    const last7 = getDateRange(7);
+    const last30 = getDateRange(30);
+    
+    // Total completions across all habits this week
+    const weekCompletions = logs.filter(l => last7.includes(l.logged_date) && l.completed).length;
+    const weekPossible = todayHabits.length * 7;
+    const weekRate = weekPossible > 0 ? Math.round((weekCompletions / weekPossible) * 100) : 0;
+
+    // Total completions across all habits this month
+    const monthCompletions = logs.filter(l => last30.includes(l.logged_date) && l.completed).length;
+    const monthPossible = todayHabits.length * 30;
+    const monthRate = monthPossible > 0 ? Math.round((monthCompletions / monthPossible) * 100) : 0;
+
+    // Best streak across all habits
+    const bestStreak = streaks.reduce((max, s) => Math.max(max, s.max_streak || 0), 0);
+    const totalCompletionsAll = streaks.reduce((sum, s) => sum + (s.total_completions || 0), 0);
+    
+    // Points earned from habits (5 per completion)
+    const totalPointsEarned = totalCompletionsAll * 5;
+
+    return { weekRate, monthRate, bestStreak, totalCompletionsAll, totalPointsEarned, weekCompletions, monthCompletions };
+  }, [logs, streaks, todayHabits]);
 
   // ─── Complete habit ────────────────────────────────────────
   const handleComplete = async (habit: Habit, value?: number, note?: string) => {
@@ -478,21 +507,189 @@ export default function HabitsSection({
     );
   }
 
-  // ─── Main list view ────────────────────────────────────────
+  // ─── Main dashboard view ───────────────────────────────────
   return (
-    <section className="py-10 bg-white min-h-[60vh]">
+    <section className="py-6 bg-white min-h-[60vh]">
       <div className="container mx-auto px-4 max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+
+        {/* ══════ STATS DASHBOARD (horizontal scroll) ══════ */}
+        {habits.length > 0 && (
+          <div className="mb-6">
+            {/* Stats carousel dots */}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black text-navy-dark/40 uppercase tracking-widest font-sans">
+                Estadísticas
+              </h3>
+              <div className="flex gap-1.5">
+                {[{ label: "General" }, ...habits].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setStatsSlide(i);
+                      if (statsScrollRef.current) {
+                        statsScrollRef.current.scrollTo({ left: i * statsScrollRef.current.offsetWidth, behavior: "smooth" });
+                      }
+                    }}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      statsSlide === i ? "bg-gold w-5" : "bg-navy-dark/15 hover:bg-navy-dark/30"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Scrollable stats cards */}
+            <div
+              ref={statsScrollRef}
+              className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-0 -mx-4 px-4"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                const idx = Math.round(el.scrollLeft / el.offsetWidth);
+                setStatsSlide(idx);
+              }}
+            >
+              {/* ── General Stats Card ── */}
+              <div className="snap-center flex-shrink-0 w-full pr-3">
+                <div className="bg-gradient-to-br from-navy-dark to-navy-dark/90 rounded-3xl p-5 text-white shadow-xl relative overflow-hidden">
+                  {/* Decorative */}
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                  <div className="absolute bottom-0 left-0 w-20 h-20 bg-gold/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+                  
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 bg-gold/20 rounded-xl flex items-center justify-center">
+                        <BarChart3 size={16} className="text-gold" />
+                      </div>
+                      <span className="text-sm font-bold text-white/80 font-sans">Resumen General</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
+                        <p className="text-2xl font-black font-sans">{globalStats.weekRate}%</p>
+                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">Semana</p>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
+                        <p className="text-2xl font-black font-sans">{globalStats.monthRate}%</p>
+                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">Mes</p>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
+                        <p className="text-2xl font-black font-sans text-gold">{globalStats.bestStreak}</p>
+                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">Mejor racha</p>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
+                        <p className="text-2xl font-black font-sans">{globalStats.totalPointsEarned}</p>
+                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mt-0.5">🪙 Ganados</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Per-Habit Stats Cards ── */}
+              {habits.map((habit) => {
+                const streak = getStreak(habit.id);
+                const last7 = getDateRange(7);
+                const last30 = getDateRange(30);
+                const completedDates = new Set(
+                  logs.filter(l => l.habit_id === habit.id && l.completed).map(l => l.logged_date)
+                );
+                const weeklyDone = last7.filter(d => completedDates.has(d)).length;
+                const monthlyDone = last30.filter(d => completedDates.has(d)).length;
+
+                return (
+                  <div key={habit.id} className="snap-center flex-shrink-0 w-full pr-3">
+                    <div
+                      className="rounded-3xl p-5 shadow-lg relative overflow-hidden border"
+                      style={{
+                        background: `linear-gradient(135deg, ${habit.color}15, ${habit.color}08)`,
+                        borderColor: habit.color + "25",
+                      }}
+                    >
+                      <div className="absolute top-0 right-0 w-24 h-24 rounded-full -translate-y-1/2 translate-x-1/2"
+                        style={{ backgroundColor: habit.color + "10" }} />
+                      
+                      <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm"
+                            style={{ backgroundColor: habit.color + "20" }}
+                          >
+                            {habit.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-sans font-bold text-sm text-navy-dark truncate">{habit.name}</h4>
+                            <p className="text-[10px] text-navy-dark/50 font-sans">{CATEGORIES.find(c => c.id === habit.category)?.label}</p>
+                          </div>
+                          <button
+                            onClick={() => setDetailHabit(habit)}
+                            className="text-[10px] font-bold text-navy-dark/40 hover:text-gold transition-colors font-sans uppercase tracking-wider"
+                          >
+                            Ver más →
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                          <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center">
+                            <p className="text-lg font-black text-navy-dark font-sans">{streak?.current_streak || 0}</p>
+                            <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Racha</p>
+                          </div>
+                          <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center">
+                            <p className="text-lg font-black font-sans" style={{ color: habit.color }}>{streak?.max_streak || 0}</p>
+                            <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Récord</p>
+                          </div>
+                          <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center">
+                            <p className="text-lg font-black text-navy-dark font-sans">{Math.round((weeklyDone / 7) * 100)}%</p>
+                            <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Semana</p>
+                          </div>
+                          <div className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center">
+                            <p className="text-lg font-black text-navy-dark font-sans">{Math.round((monthlyDone / 30) * 100)}%</p>
+                            <p className="text-[9px] font-bold text-navy-dark/40 uppercase">Mes</p>
+                          </div>
+                        </div>
+
+                        {/* Mini 7-day chain */}
+                        <div className="flex gap-1.5 mt-3 justify-center">
+                          {last7.map((date) => {
+                            const done = completedDates.has(date);
+                            const dayLabel = new Date(date + "T12:00:00").toLocaleDateString("es-ES", { weekday: "narrow" });
+                            return (
+                              <div key={date} className="flex flex-col items-center gap-0.5">
+                                <div
+                                  className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+                                    done ? "shadow-sm" : "bg-navy-dark/[0.06]"
+                                  }`}
+                                  style={done ? { backgroundColor: habit.color } : undefined}
+                                >
+                                  {done && <Check size={12} className="text-white" strokeWidth={3} />}
+                                </div>
+                                <span className="text-[8px] font-bold text-navy-dark/30 uppercase">{dayLabel}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══════ TODAY'S PROGRESS + HEADER ══════ */}
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-serif font-bold text-navy-dark flex items-center gap-2">
-              <Target size={24} className="text-gold" />
-              Mis Hábitos
+            <h2 className="text-xl font-serif font-bold text-navy-dark flex items-center gap-2">
+              Hoy
+              {progress === 100 && todayHabits.length > 0 && (
+                <span className="text-green-500 text-sm">✓</span>
+              )}
             </h2>
-            <p className="text-sm text-navy-dark/60 font-sans mt-1">
+            <p className="text-xs text-navy-dark/50 font-sans mt-0.5">
               {todayHabits.length > 0
-                ? `${completedCount}/${todayHabits.length} completados hoy`
-                : "Crea tu primer hábito"}
+                ? `${completedCount} de ${todayHabits.length} completados`
+                : habits.length > 0 ? "No hay hábitos programados para hoy" : ""}
             </p>
           </div>
           <button
@@ -500,21 +697,17 @@ export default function HabitsSection({
               setEditingHabit(null);
               setShowModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-3 bg-navy-dark text-white rounded-2xl font-sans font-bold text-sm shadow-lg hover:bg-gold hover:text-navy-dark transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-gold text-white rounded-2xl font-sans font-bold text-xs shadow-lg shadow-gold/20 hover:bg-gold/90 transition-all active:scale-95"
           >
-            <Plus size={18} />
+            <Plus size={16} strokeWidth={3} />
             Nuevo
           </button>
         </div>
 
-        {/* Progress bar */}
+        {/* Progress bar (compact) */}
         {todayHabits.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-navy-dark/40 uppercase tracking-wider">Progreso del día</span>
-              <span className="text-sm font-black text-gold font-sans">{progress}%</span>
-            </div>
-            <div className="h-3 bg-cream rounded-full overflow-hidden border border-light-gray">
+          <div className="mb-5">
+            <div className="h-2 bg-cream rounded-full overflow-hidden border border-light-gray/50">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{
@@ -530,7 +723,7 @@ export default function HabitsSection({
 
         {/* Status message */}
         {statusMsg && (
-          <div className={`mb-6 p-4 rounded-2xl text-sm font-sans font-bold border animate-in fade-in slide-in-from-top-2 ${
+          <div className={`mb-4 p-3 rounded-2xl text-sm font-sans font-bold border animate-in fade-in slide-in-from-top-2 ${
             statusMsg.type === "error"
               ? "bg-red-50 border-red-100 text-red-600"
               : "bg-green-50 border-green-100 text-green-600"
@@ -539,35 +732,42 @@ export default function HabitsSection({
           </div>
         )}
 
-        {/* Loading */}
+        {/* ══════ HABITS LIST ══════ */}
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="animate-spin text-gold w-8 h-8" />
           </div>
-        ) : todayHabits.length === 0 ? (
-          /* Empty state */
-          <div className="text-center py-16">
-            <div className="w-20 h-20 bg-cream rounded-3xl flex items-center justify-center mx-auto mb-6 text-3xl shadow-inner border border-light-gray">
-              🎯
+        ) : habits.length === 0 ? (
+          /* Empty state — beautiful CTA */
+          <div className="text-center py-12">
+            <div className="w-24 h-24 bg-gradient-to-br from-gold/10 to-amber-500/5 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-gold/15 shadow-inner">
+              <Target size={40} className="text-gold/60" />
             </div>
-            <h3 className="font-serif font-bold text-xl text-navy-dark mb-3">Aún no tienes hábitos</h3>
-            <p className="text-sm text-navy-dark/60 font-sans mb-6 max-w-sm mx-auto">
-              Crea tu primer hábito personal y comienza a construir una mejor versión de ti.
+            <h3 className="font-serif font-bold text-xl text-navy-dark mb-2">Comienza tu camino</h3>
+            <p className="text-sm text-navy-dark/50 font-sans mb-8 max-w-xs mx-auto leading-relaxed">
+              Crea tu primer hábito personal y gana <span className="font-bold text-gold">+5 puntos</span> cada vez que lo completes.
             </p>
             <button
               onClick={() => {
                 setEditingHabit(null);
                 setShowModal(true);
               }}
-              className="px-8 py-4 bg-gold text-white rounded-2xl font-sans font-bold shadow-lg hover:bg-gold/90 transition-all active:scale-95"
+              className="px-8 py-4 bg-navy-dark text-white rounded-2xl font-sans font-bold shadow-xl hover:bg-gold hover:text-navy-dark transition-all active:scale-95 inline-flex items-center gap-2"
             >
-              <Plus size={18} className="inline mr-2" />
+              <Plus size={18} strokeWidth={3} />
               Crear Primer Hábito
             </button>
           </div>
+        ) : todayHabits.length === 0 ? (
+          /* No habits due today */
+          <div className="text-center py-10 bg-cream/30 rounded-3xl border border-light-gray">
+            <CalendarIcon size={32} className="text-navy-dark/20 mx-auto mb-3" />
+            <p className="text-sm text-navy-dark/50 font-sans font-bold">No tienes hábitos programados para hoy</p>
+            <p className="text-xs text-navy-dark/30 font-sans mt-1">Disfruta tu descanso, Agente 😌</p>
+          </div>
         ) : (
-          /* Habit cards */
-          <div className="space-y-3">
+          /* Habit cards — streamlined */
+          <div className="space-y-2.5">
             {todayHabits.map((habit) => {
               const isCompleted = todayCompletedIds.has(habit.id);
               const streak = getStreak(habit.id);
@@ -666,7 +866,7 @@ export default function HabitsSection({
                         inputMode="decimal"
                         min={0}
                         step={isDuration ? 1 : 0.5}
-                        value={quantityInputs[habit.id] || ""}
+                        value={quantityInputs[habit.id] ?? ""}
                         onChange={(e) => setQuantityInputs(prev => ({ ...prev, [habit.id]: e.target.value }))}
                         placeholder={`Meta: ${habit.target_value} ${habit.target_unit || (isDuration ? "min" : "")}`}
                         className="flex-1 px-3 py-2 bg-cream/50 rounded-xl border border-light-gray text-sm font-sans outline-none focus:border-gold focus:ring-1 focus:ring-gold/20 transition-all"
@@ -690,11 +890,26 @@ export default function HabitsSection({
 
         {/* All done celebration */}
         {todayHabits.length > 0 && completedCount === todayHabits.length && (
-          <div className="mt-8 text-center bg-green-50 rounded-3xl p-8 border border-green-100">
-            <Award size={40} className="text-green-500 mx-auto mb-4" />
-            <h3 className="font-serif font-bold text-xl text-green-800 mb-2">¡Todos los hábitos completados! 🎉</h3>
+          <div className="mt-6 text-center bg-green-50 rounded-3xl p-6 border border-green-100">
+            <Award size={36} className="text-green-500 mx-auto mb-3" />
+            <h3 className="font-serif font-bold text-lg text-green-800 mb-1">¡Todos completados! 🎉</h3>
             <p className="text-sm text-green-600 font-sans">
-              Has ganado <span className="font-black">{todayHabits.length * 5} 🪙</span> puntos hoy. ¡Sigue así, Agente!
+              Ganaste <span className="font-black">{todayHabits.length * 5} 🪙</span> puntos hoy.
+            </p>
+          </div>
+        )}
+
+        {/* Points tip — only when have habits */}
+        {habits.length > 0 && (
+          <div className="mt-6 bg-gold/5 rounded-2xl p-4 border border-gold/10 text-center">
+            <p className="font-sans text-xs text-navy-dark/60">
+              <span className="font-bold text-gold">💡</span> Los puntos se suman a tu balance.{" "}
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent("fbi:change-tab", { detail: "shop" }))}
+                className="text-gold font-bold hover:underline"
+              >
+                Canjéalos en la Tienda
+              </button>
             </p>
           </div>
         )}
@@ -740,10 +955,10 @@ function HabitModal({
   const [description, setDescription] = useState(habit?.description || "");
   const [category, setCategory] = useState<HabitCategory>(habit?.category as HabitCategory || "general");
   const [habitType, setHabitType] = useState<HabitType>(habit?.habit_type as HabitType || "boolean");
-  const [targetValue, setTargetValue] = useState(habit?.target_value || 1);
+  const [targetValue, setTargetValue] = useState<string>(String(habit?.target_value ?? 1));
   const [targetUnit, setTargetUnit] = useState(habit?.target_unit || "");
   const [frequency, setFrequency] = useState<Frequency>(habit?.frequency as Frequency || "daily");
-  const [frequencyDays, setFrequencyDays] = useState(habit?.frequency_days || 3);
+  const [frequencyDays, setFrequencyDays] = useState<string>(String(habit?.frequency_days ?? 3));
   const [specificDays, setSpecificDays] = useState<string[]>(habit?.specific_days || []);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(habit?.time_of_day as TimeOfDay || "any");
   const [color, setColor] = useState(habit?.color || "#D4A017");
@@ -759,6 +974,9 @@ function HabitModal({
       return;
     }
 
+    const parsedTarget = parseInt(targetValue) || 1;
+    const parsedFreqDays = parseInt(frequencyDays) || 3;
+
     setSaving(true);
     setError(null);
 
@@ -768,10 +986,10 @@ function HabitModal({
       icon,
       category,
       habit_type: habitType,
-      target_value: targetValue,
+      target_value: parsedTarget,
       target_unit: targetUnit || null,
       frequency,
-      frequency_days: frequencyDays,
+      frequency_days: parsedFreqDays,
       specific_days: frequency === "specific_days" ? specificDays : null,
       time_of_day: timeOfDay,
       color,
@@ -837,7 +1055,7 @@ function HabitModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ej: Meditar, Leer, Hacer ejercicio..."
+              placeholder="Ej: Orar, Leer la Biblia, Hacer ejercicio..."
               maxLength={60}
               className="w-full p-3 bg-cream/50 border border-light-gray rounded-xl outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 font-sans text-sm transition-all"
               autoFocus
@@ -853,7 +1071,7 @@ function HabitModal({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ej: 10 minutos de meditación guiada"
+              placeholder="Ej: 15 minutos de lectura devocional"
               maxLength={120}
               className="w-full p-3 bg-cream/50 border border-light-gray rounded-xl outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 font-sans text-sm transition-all"
             />
@@ -923,11 +1141,17 @@ function HabitModal({
                   Meta
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   inputMode="numeric"
-                  min={1}
                   value={targetValue}
-                  onChange={(e) => setTargetValue(parseInt(e.target.value) || 1)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // Allow empty string and digits only
+                    if (v === "" || /^\d+$/.test(v)) {
+                      setTargetValue(v);
+                    }
+                  }}
+                  placeholder="Ej: 30"
                   className="w-full p-3 bg-cream/50 border border-light-gray rounded-xl outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 font-sans text-sm"
                 />
               </div>
@@ -987,11 +1211,17 @@ function HabitModal({
             {frequency === "weekly" && (
               <div className="mt-3 flex items-center gap-3">
                 <input
-                  type="number"
-                  min={1}
-                  max={7}
+                  type="text"
+                  inputMode="numeric"
                   value={frequencyDays}
-                  onChange={(e) => setFrequencyDays(parseInt(e.target.value) || 1)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // Allow empty string, then only valid digits 1-7
+                    if (v === "" || (/^\d$/.test(v) && parseInt(v) >= 1 && parseInt(v) <= 7)) {
+                      setFrequencyDays(v);
+                    }
+                  }}
+                  placeholder="3"
                   className="w-20 p-2 bg-cream/50 border border-light-gray rounded-xl text-center font-sans text-sm outline-none focus:border-gold"
                 />
                 <span className="text-sm text-navy-dark/60 font-sans">veces por semana</span>
