@@ -1030,6 +1030,7 @@ export default function HabitsSection({
         <HabitModal
           habit={editingHabit}
           userId={userId}
+          activeCount={habits.length}
           onClose={() => {
             setShowModal(false);
             setEditingHabit(null);
@@ -1050,11 +1051,13 @@ export default function HabitsSection({
 function HabitModal({
   habit,
   userId,
+  activeCount,
   onClose,
   onSaved,
 }: {
   habit: Habit | null;
   userId: string;
+  activeCount: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1076,12 +1079,23 @@ function HabitModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!isEdit && activeCount >= 5) {
+      setError("Límite alcanzado: Tienes 5 hábitos activos. Debes archivar alguno de tu lista antes de poder crear uno nuevo.");
+    }
+  }, [isEdit, activeCount]);
+
   const selectedCat = CATEGORIES.find(c => c.id === category);
   const icon = selectedCat?.icon || "🎯";
 
   const handleSave = async () => {
     if (!name.trim()) {
       setError("El nombre es obligatorio.");
+      return;
+    }
+
+    if (!isEdit && activeCount >= 5) {
+      setError("Límite alcanzado: No puedes tener más de 5 hábitos activos a la vez. Archiva alguno para continuar.");
       return;
     }
 
@@ -1483,7 +1497,7 @@ function HabitModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !name.trim()}
+            disabled={saving || !name.trim() || (!isEdit && activeCount >= 5)}
             className="flex-[2] py-3.5 bg-gold text-white rounded-2xl font-sans font-bold text-sm shadow-lg hover:bg-gold/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 size={18} className="animate-spin" /> : isEdit ? "Guardar Cambios" : "Crear Hábito"}
