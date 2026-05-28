@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.habits (
   color          text DEFAULT '#D4A017',
   sort_order     int DEFAULT 0,
   is_archived    boolean DEFAULT false,
+  is_public      boolean DEFAULT true,
   created_at     timestamptz DEFAULT now() NOT NULL,
   updated_at     timestamptz DEFAULT now() NOT NULL
 );
@@ -231,32 +232,35 @@ BEGIN
   PERFORM public.award_streak_points(v_user_id, 5);
   v_points_awarded := 5;
 
-  -- Notificación anónima a la comunidad
-  SELECT COALESCE(full_name, username, 'Un agente') INTO v_user_name
-  FROM public.profiles WHERE id = v_user_id;
+  -- Auto-publicar en el muro e insertar notificaciones solo si el hábito es público
+  IF COALESCE(v_habit.is_public, true) THEN
+    -- Notificación anónima a la comunidad
+    SELECT COALESCE(full_name, username, 'Un agente') INTO v_user_name
+    FROM public.profiles WHERE id = v_user_id;
 
-  -- Auto-publicar en el muro de comunidad de forma atómica
-  INSERT INTO public.posts (author_id, content, is_anonymous)
-  VALUES (
-    v_user_id,
-    '🎯 [HABIT_COMPLETE]:' || jsonb_build_object(
-      'user_name', v_user_name,
-      'category', v_habit.category,
-      'icon', v_habit.icon,
-      'color', v_habit.color,
-      'streak', v_new_streak
-    )::text,
-    false
-  );
+    -- Auto-publicar en el muro de comunidad de forma atómica
+    INSERT INTO public.posts (author_id, content, is_anonymous)
+    VALUES (
+      v_user_id,
+      '🎯 [HABIT_COMPLETE]:' || jsonb_build_object(
+        'user_name', v_user_name,
+        'category', v_habit.category,
+        'icon', v_habit.icon,
+        'color', v_habit.color,
+        'streak', v_new_streak
+      )::text,
+      false
+    );
 
-  -- Insertar notificación para TODOS los demás usuarios (batch, max 200)
-  INSERT INTO public.notifications (user_id, actor_id, type, message, link)
-  SELECT p.id, v_user_id, 'habit_complete',
-    v_user_name || ' ha completado un hábito personal, ¡anímalo a seguir! 💪',
-    '#habits'
-  FROM public.profiles p
-  WHERE p.id != v_user_id
-  LIMIT 200;
+    -- Insertar notificación para TODOS los demás usuarios (batch, max 200)
+    INSERT INTO public.notifications (user_id, actor_id, type, message, link)
+    SELECT p.id, v_user_id, 'habit_complete',
+      v_user_name || ' ha completado un hábito personal, ¡anímalo a seguir! 💪',
+      '#habits'
+    FROM public.profiles p
+    WHERE p.id != v_user_id
+    LIMIT 200;
+  END IF;
 
   RETURN jsonb_build_object(
     'ok', true,

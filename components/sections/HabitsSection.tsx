@@ -7,7 +7,7 @@ import {
   Pencil, Archive, Trash2, ChevronLeft, ChevronRight,
   Clock, Sun, Sunset, Moon as MoonIcon, BarChart3,
   Calendar as CalendarIcon, TrendingUp, Award, Hash,
-  Timer, Ban, CircleCheck, Zap, Star,
+  Timer, Ban, CircleCheck, Zap, Star, Globe, Lock,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import confetti from "canvas-confetti";
@@ -35,6 +35,7 @@ type Habit = {
   color: string;
   sort_order: number;
   is_archived: boolean;
+  is_public: boolean;
   created_at: string;
 };
 
@@ -409,6 +410,28 @@ export default function HabitsSection({
                 {detailHabit.description && (
                   <p className="text-sm text-navy-dark/60 font-sans mt-1">{detailHabit.description}</p>
                 )}
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="text-[10px] bg-navy-dark/[0.06] text-navy-dark/60 px-2 py-0.5 rounded-full font-bold uppercase">
+                    {CATEGORIES.find(c => c.id === detailHabit.category)?.label || "General"}
+                  </span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1 ${
+                    detailHabit.is_public ?? true
+                      ? "bg-green-50 text-green-700 border border-green-100"
+                      : "bg-amber-50 text-amber-700 border border-amber-100"
+                  }`}>
+                    {detailHabit.is_public ?? true ? (
+                      <>
+                        <Globe size={10} />
+                        Público
+                      </>
+                    ) : (
+                      <>
+                        <Lock size={10} />
+                        Privado
+                      </>
+                    )}
+                  </span>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button
@@ -1049,6 +1072,7 @@ function HabitModal({
   const [specificDays, setSpecificDays] = useState<string[]>(habit?.specific_days || []);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(habit?.time_of_day as TimeOfDay || "any");
   const [color, setColor] = useState(habit?.color || "#D4A017");
+  const [isPublic, setIsPublic] = useState(habit ? habit.is_public ?? true : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1080,6 +1104,7 @@ function HabitModal({
       specific_days: frequency === "specific_days" ? specificDays : null,
       time_of_day: timeOfDay,
       color,
+      is_public: isPublic,
       updated_at: new Date().toISOString(),
     };
 
@@ -1373,6 +1398,58 @@ function HabitModal({
                   style={{ backgroundColor: c }}
                 />
               ))}
+            </div>
+          </div>
+
+          {/* Privacidad */}
+          <div>
+            <label className="block text-xs font-bold text-navy-dark/50 uppercase tracking-wider mb-2">
+              ¿Quieres que tu hábito sea público o privado?
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setIsPublic(true)}
+                className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${
+                  isPublic
+                    ? "bg-gold/10 border-gold shadow-sm"
+                    : "bg-white border-light-gray hover:border-gold/30"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Globe size={16} className={isPublic ? "text-gold" : "text-navy-dark/40"} />
+                  <span className={`text-sm font-bold font-sans ${
+                    isPublic ? "text-gold" : "text-navy-dark"
+                  }`}>
+                    Público
+                  </span>
+                </div>
+                <span className="text-[11px] text-navy-dark/50 font-sans leading-tight">
+                  Se publicará en el muro al completarlo para inspirar a la comunidad.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPublic(false)}
+                className={`flex flex-col items-start p-3.5 rounded-2xl border text-left transition-all ${
+                  !isPublic
+                    ? "bg-gold/10 border-gold shadow-sm"
+                    : "bg-white border-light-gray hover:border-gold/30"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Lock size={16} className={!isPublic ? "text-gold" : "text-navy-dark/40"} />
+                  <span className={`text-sm font-bold font-sans ${
+                    !isPublic ? "text-gold" : "text-navy-dark"
+                  }`}>
+                    Privado
+                  </span>
+                </div>
+                <span className="text-[11px] text-navy-dark/50 font-sans leading-tight">
+                  Solo tú lo verás. Suma 5 puntos igual, pero no se publica en el muro.
+                </span>
+              </button>
             </div>
           </div>
 
