@@ -791,7 +791,16 @@ export default function Comunidad({
                               <button 
                                 onClick={() => { 
                                   setEditingPostId(post.id); 
-                                  setEditPostContent(post.content); 
+                                  if (post.content.startsWith("🎯 [HABIT_COMPLETE]:")) {
+                                    try {
+                                      const meta = JSON.parse(post.content.substring(20));
+                                      setEditPostContent(`¡Completé mi hábito de ${meta.category || 'desarrollo'} hoy! 💪`);
+                                    } catch (e) {
+                                      setEditPostContent("¡Completé mi hábito personal hoy! 💪");
+                                    }
+                                  } else {
+                                    setEditPostContent(post.content); 
+                                  }
                                   setOpenDropdownId(null); 
                                 }} 
                                 className="w-full text-left px-4 py-2 text-xs font-bold text-navy-dark/70 hover:bg-gray-50 flex items-center gap-2"
@@ -886,20 +895,20 @@ export default function Comunidad({
                                     )}
                                   </div>
 
-                                  {/* Cheering Button inside card */}
-                                  <div className="pt-3 border-t border-navy-dark/5 flex">
+                                  {/* Cheering Button inside card — small, dynamic centered chip */}
+                                  <div className="pt-3 border-t border-navy-dark/5 flex justify-center">
                                     <button
                                       onClick={() => handleToggleReaction(post.id, "celebrate")}
-                                      className={`w-full py-3.5 px-5 rounded-2xl font-sans font-bold text-xs shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                                      className={`py-2 px-4 rounded-full font-sans font-extrabold text-[11px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2 shadow-sm border ${
                                         hasCheered
-                                          ? "bg-emerald-500 text-white shadow-emerald-500/10"
-                                          : "bg-gold text-white shadow-gold/10 hover:bg-gold/90"
+                                          ? "bg-emerald-50 text-emerald-600 border-emerald-200/50 shadow-emerald-100"
+                                          : "bg-gold/10 text-gold border-gold/20 hover:bg-gold hover:text-white hover:border-gold shadow-gold/5"
                                       }`}
                                     >
-                                      <Sparkles size={14} className={hasCheered ? "animate-pulse" : "animate-bounce"} />
+                                      <Sparkles size={12} className={hasCheered ? "animate-pulse text-emerald-500" : "animate-bounce"} />
                                       {hasCheered
                                         ? `¡Animado! 🥳 (${cheerCount})`
-                                        : `Anima a ${meta.user_name} a seguir (${cheerCount})`
+                                        : `Anima a ${meta.user_name} (${cheerCount})`
                                       }
                                     </button>
                                   </div>

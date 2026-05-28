@@ -97,3 +97,64 @@ DROP TRIGGER IF EXISTS on_post_comment ON public.comments;
 CREATE TRIGGER on_post_comment
   AFTER INSERT ON public.comments
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();
+
+-- ============================================================
+-- 3. SOLUCIÓN DEFINITIVA DE SEGURIDAD RLS PARA REACCIONES
+-- ============================================================
+
+-- Habilitar RLS en post_reactions
+ALTER TABLE public.post_reactions ENABLE ROW LEVEL SECURITY;
+
+-- Eliminar políticas conflictivas antiguas
+DROP POLICY IF EXISTS "Reactions are viewable by everyone." ON public.post_reactions;
+DROP POLICY IF EXISTS "Authenticated users can add reactions." ON public.post_reactions;
+DROP POLICY IF EXISTS "Users can remove their own reactions." ON public.post_reactions;
+DROP POLICY IF EXISTS "Users can update their own reactions." ON public.post_reactions;
+DROP POLICY IF EXISTS "Los usuarios pueden reaccionar" ON public.post_reactions;
+DROP POLICY IF EXISTS "Permitir lectura de reacciones" ON public.post_reactions;
+
+-- Crear políticas explícitas y robustas para post_reactions
+CREATE POLICY "post_reactions_select" ON public.post_reactions
+  FOR SELECT USING (true);
+
+CREATE POLICY "post_reactions_insert" ON public.post_reactions
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "post_reactions_update" ON public.post_reactions
+  FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "post_reactions_delete" ON public.post_reactions
+  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
+-- Dar privilegios explícitos a roles
+GRANT ALL ON TABLE public.post_reactions TO authenticated;
+GRANT SELECT ON TABLE public.post_reactions TO anon;
+
+
+-- Habilitar RLS en comment_reactions
+ALTER TABLE public.comment_reactions ENABLE ROW LEVEL SECURITY;
+
+-- Eliminar políticas conflictivas antiguas
+DROP POLICY IF EXISTS "Comment reactions viewable by everyone." ON public.comment_reactions;
+DROP POLICY IF EXISTS "Authenticated users can add comment reactions." ON public.comment_reactions;
+DROP POLICY IF EXISTS "Users can remove their own comment reactions." ON public.comment_reactions;
+DROP POLICY IF EXISTS "Users can update their own comment reactions." ON public.comment_reactions;
+DROP POLICY IF EXISTS "Los usuarios pueden reaccionar a comentarios" ON public.comment_reactions;
+DROP POLICY IF EXISTS "Permitir lectura de reacciones de comentarios" ON public.comment_reactions;
+
+-- Crear políticas explícitas y robustas para comment_reactions
+CREATE POLICY "comment_reactions_select" ON public.comment_reactions
+  FOR SELECT USING (true);
+
+CREATE POLICY "comment_reactions_insert" ON public.comment_reactions
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "comment_reactions_update" ON public.comment_reactions
+  FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "comment_reactions_delete" ON public.comment_reactions
+  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
+-- Dar privilegios explícitos a roles
+GRANT ALL ON TABLE public.comment_reactions TO authenticated;
+GRANT SELECT ON TABLE public.comment_reactions TO anon;
