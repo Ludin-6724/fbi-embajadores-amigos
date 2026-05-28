@@ -102,7 +102,36 @@ CREATE TRIGGER on_post_comment
 -- 3. SOLUCIÓN DEFINITIVA DE SEGURIDAD RLS PARA REACCIONES
 -- ============================================================
 
--- Habilitar RLS en post_reactions
+-- 3.1 Asegurar que los valores del ENUM 'celebrate' y 'sad' existen
+DO $$ 
+BEGIN
+    BEGIN
+        ALTER TYPE public.reaction_type ADD VALUE 'celebrate';
+    EXCEPTION
+        WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TYPE public.reaction_type ADD VALUE 'sad';
+    EXCEPTION
+        WHEN duplicate_object THEN NULL;
+    END;
+END $$;
+
+-- 3.2 Limpiar duplicados antiguos de post_reactions para evitar errores en la restricción UNIQUE
+DELETE FROM public.post_reactions
+WHERE id NOT IN (
+  SELECT DISTINCT ON (post_id, user_id) id
+  FROM public.post_reactions
+  ORDER BY post_id, user_id, created_at DESC
+);
+
+-- 3.3 Asegurar la restricción de unicidad de 1 reacción por usuario por publicación
+ALTER TABLE public.post_reactions DROP CONSTRAINT IF EXISTS post_reactions_post_id_user_id_reaction_key;
+ALTER TABLE public.post_reactions DROP CONSTRAINT IF EXISTS post_reactions_post_id_user_id_key;
+ALTER TABLE public.post_reactions ADD CONSTRAINT post_reactions_post_id_user_id_key UNIQUE(post_id, user_id);
+
+-- 3.4 Habilitar RLS robusto en post_reactions
 ALTER TABLE public.post_reactions ENABLE ROW LEVEL SECURITY;
 
 -- Eliminar políticas conflictivas antiguas
@@ -112,6 +141,10 @@ DROP POLICY IF EXISTS "Users can remove their own reactions." ON public.post_rea
 DROP POLICY IF EXISTS "Users can update their own reactions." ON public.post_reactions;
 DROP POLICY IF EXISTS "Los usuarios pueden reaccionar" ON public.post_reactions;
 DROP POLICY IF EXISTS "Permitir lectura de reacciones" ON public.post_reactions;
+DROP POLICY IF EXISTS "post_reactions_select" ON public.post_reactions;
+DROP POLICY IF EXISTS "post_reactions_insert" ON public.post_reactions;
+DROP POLICY IF EXISTS "post_reactions_update" ON public.post_reactions;
+DROP POLICY IF EXISTS "post_reactions_delete" ON public.post_reactions;
 
 -- Crear políticas explícitas y robustas para post_reactions
 CREATE POLICY "post_reactions_select" ON public.post_reactions
@@ -131,6 +164,19 @@ GRANT ALL ON TABLE public.post_reactions TO authenticated;
 GRANT SELECT ON TABLE public.post_reactions TO anon;
 
 
+-- 3.5 Limpiar duplicados antiguos de comment_reactions
+DELETE FROM public.comment_reactions
+WHERE id NOT IN (
+  SELECT DISTINCT ON (comment_id, user_id) id
+  FROM public.comment_reactions
+  ORDER BY comment_id, user_id, created_at DESC
+);
+
+-- Asegurar la restricción de unicidad de 1 reacción por usuario por comentario
+ALTER TABLE public.comment_reactions DROP CONSTRAINT IF EXISTS comment_reactions_comment_id_user_id_reaction_key;
+ALTER TABLE public.comment_reactions DROP CONSTRAINT IF EXISTS comment_reactions_comment_id_user_id_key;
+ALTER TABLE public.comment_reactions ADD CONSTRAINT comment_reactions_comment_id_user_id_key UNIQUE(comment_id, user_id);
+
 -- Habilitar RLS en comment_reactions
 ALTER TABLE public.comment_reactions ENABLE ROW LEVEL SECURITY;
 
@@ -141,6 +187,10 @@ DROP POLICY IF EXISTS "Users can remove their own comment reactions." ON public.
 DROP POLICY IF EXISTS "Users can update their own comment reactions." ON public.comment_reactions;
 DROP POLICY IF EXISTS "Los usuarios pueden reaccionar a comentarios" ON public.comment_reactions;
 DROP POLICY IF EXISTS "Permitir lectura de reacciones de comentarios" ON public.comment_reactions;
+DROP POLICY IF EXISTS "comment_reactions_select" ON public.comment_reactions;
+DROP POLICY IF EXISTS "comment_reactions_insert" ON public.comment_reactions;
+DROP POLICY IF EXISTS "comment_reactions_update" ON public.comment_reactions;
+DROP POLICY IF EXISTS "comment_reactions_delete" ON public.comment_reactions;
 
 -- Crear políticas explícitas y robustas para comment_reactions
 CREATE POLICY "comment_reactions_select" ON public.comment_reactions
