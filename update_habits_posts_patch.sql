@@ -1,36 +1,9 @@
 /* ============================================================
-   FBI Embajadores Amigos — Notifications System
+   FBI Embajadores Amigos — Parche de Notificaciones de Hábitos
    Ejecutar en: Supabase Dashboard > SQL Editor
    ============================================================ */
 
--- 1. Crear tabla de notificaciones
-CREATE TABLE IF NOT EXISTS public.notifications (
-  id          uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id     uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL, -- Destinatario
-  actor_id    uuid REFERENCES public.profiles(id) ON DELETE CASCADE,          -- Quien genera la acción
-  type        text NOT NULL, -- 'reaction', 'comment', 'community_approved'
-  message     text NOT NULL,
-  link        text,          -- URL para redirección
-  is_read     boolean DEFAULT false,
-  created_at  timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 2. Habilitar RLS
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can see their own notifications." ON public.notifications;
-CREATE POLICY "Users can see their own notifications." ON public.notifications
-  FOR SELECT USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can update their own notifications." ON public.notifications;
-CREATE POLICY "Users can update their own notifications." ON public.notifications
-  FOR UPDATE USING (auth.uid() = user_id);
-
--- 3. Habilitar Realtime para la tabla
-ALTER TABLE public.notifications REPLICA IDENTITY FULL;
--- Asegúrate de habilitar 'Realtime' en el Dashboard de Supabase para esta tabla.
-
--- 4. Función para insertar notificaciones automáticamente
+-- 1. Actualizar la función trigger para soportar mensajes de ánimo de hábitos personalizados
 CREATE OR REPLACE FUNCTION public.handle_new_notification()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -49,7 +22,7 @@ BEGIN
 
     -- Lógica según la tabla que dispara el trigger
     IF (TG_TABLE_NAME = 'post_reactions') THEN
-        -- Obtener autor del post
+        -- Obtener autor del post y snippet del contenido
         SELECT author_id, LEFT(content, 30) INTO target_user_id, post_snippet FROM public.posts WHERE id = NEW.post_id;
         -- No notificar si el autor reacciona a su propio post
         IF (target_user_id = NEW.user_id) THEN RETURN NEW; END IF;
@@ -64,7 +37,7 @@ BEGIN
         END IF;
 
     ELSIF (TG_TABLE_NAME = 'comments') THEN
-        -- Obtener autor del post
+        -- Obtener autor del post y snippet del contenido
         SELECT author_id, LEFT(content, 30) INTO target_user_id, post_snippet FROM public.posts WHERE id = NEW.post_id;
         -- No notificar si el autor comenta su propio post
         IF (target_user_id = NEW.author_id) THEN RETURN NEW; END IF;
@@ -85,19 +58,3 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 5. Crear Triggers
-DROP TRIGGER IF EXISTS on_post_reaction ON public.post_reactions;
-CREATE TRIGGER on_post_reaction
-  AFTER INSERT ON public.post_reactions
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();
-
-DROP TRIGGER IF EXISTS on_post_comment ON public.comments;
-CREATE TRIGGER on_post_comment
-  AFTER INSERT ON public.comments
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();
-
-DROP TRIGGER IF EXISTS on_community_approve ON public.community_join_requests;
-CREATE TRIGGER on_community_approve
-  AFTER UPDATE ON public.community_join_requests
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();

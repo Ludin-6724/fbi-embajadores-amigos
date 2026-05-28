@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X } from "lucide-react";
+import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X, Sparkles, Flame } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
 import Link from "next/link";
@@ -835,6 +835,80 @@ export default function Comunidad({
                       </div>
                     ) : (
                       (() => {
+                        if (post.content.startsWith("🎯 [HABIT_COMPLETE]:")) {
+                          let meta = null;
+                          try {
+                            meta = JSON.parse(post.content.substring(20));
+                          } catch (e) {
+                            console.error("Error parsing habit complete post metadata:", e);
+                          }
+
+                          if (meta) {
+                            const cheers = post.post_reactions.filter(r => r.reaction === "celebrate");
+                            const cheerCount = cheers.length;
+                            const hasCheered = cheers.some(r => r.user_id === userId);
+
+                            return (
+                              <div
+                                className="rounded-3xl p-5 shadow-sm relative overflow-hidden border transition-all animate-fade-in mt-1 mb-2"
+                                style={{
+                                  background: `linear-gradient(135deg, ${meta.color}15, ${meta.color}05)`,
+                                  borderColor: meta.color + "25",
+                                }}
+                              >
+                                {/* Decorative bg accent */}
+                                <div
+                                  className="absolute top-0 right-0 w-24 h-24 rounded-full -translate-y-1/2 translate-x-1/2 opacity-60"
+                                  style={{ backgroundColor: meta.color + "12" }}
+                                />
+
+                                <div className="relative z-10">
+                                  <div className="flex items-center gap-3.5 mb-4">
+                                    <div
+                                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm animate-pulse"
+                                      style={{ backgroundColor: meta.color + "20" }}
+                                    >
+                                      {meta.icon || "🎯"}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="font-serif font-black text-sm text-navy-dark leading-snug">
+                                        ¡Hábito Completado! 🎉
+                                      </h4>
+                                      <p className="text-xs text-navy-dark/70 font-sans mt-0.5 leading-relaxed">
+                                        <span className="font-bold text-navy-dark">{meta.user_name}</span> ha completado un hábito personal. ¡Apóyalo en su constancia!
+                                      </p>
+                                    </div>
+                                    {meta.streak > 0 && (
+                                      <div className="flex items-center gap-1 px-2.5 py-1.5 bg-gold/10 rounded-xl flex-shrink-0 border border-gold/15">
+                                        <Flame size={14} className="text-gold fill-gold" />
+                                        <span className="text-xs font-black text-gold font-sans">{meta.streak} días</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Cheering Button inside card */}
+                                  <div className="pt-3 border-t border-navy-dark/5 flex">
+                                    <button
+                                      onClick={() => handleToggleReaction(post.id, "celebrate")}
+                                      className={`w-full py-3.5 px-5 rounded-2xl font-sans font-bold text-xs shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                                        hasCheered
+                                          ? "bg-emerald-500 text-white shadow-emerald-500/10"
+                                          : "bg-gold text-white shadow-gold/10 hover:bg-gold/90"
+                                      }`}
+                                    >
+                                      <Sparkles size={14} className={hasCheered ? "animate-pulse" : "animate-bounce"} />
+                                      {hasCheered
+                                        ? `¡Animado! 🥳 (${cheerCount})`
+                                        : `Anima a ${meta.user_name} a seguir (${cheerCount})`
+                                      }
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                        }
+
                         const { videoId, cleanedText } = extractYouTube(post.content);
                         const previewUrl = videoId ? null : extractFirstUrl(post.content);
                         const segments = linkify(cleanedText);
@@ -896,33 +970,55 @@ export default function Comunidad({
                   )}
 
                   {/* Action buttons */}
-                  <div className="border-t border-gray-100 grid grid-cols-3">
-                    <ReactionPicker
-                      onSelect={t => handleToggleReaction(post.id, t)}
-                      disabled={!userId}
-                      currentReaction={myR}
-                    >
-                      <button className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-all hover:bg-gray-50 active:bg-gray-100 ${myR ? "text-gold" : "text-navy-dark/50"}`}>
-                        <span className="text-xl leading-none">{myR ? emojiMap[myR] : "👍"}</span>
-                        <span className="text-xs">{myR ? labelMap[myR] : "Me gusta"}</span>
-                      </button>
-                    </ReactionPicker>
+                  <div className={`border-t border-gray-100 grid ${post.content.startsWith("🎯 [HABIT_COMPLETE]:") ? "grid-cols-2" : "grid-cols-3"}`}>
+                    {post.content.startsWith("🎯 [HABIT_COMPLETE]:") ? (
+                      <>
+                        <Link
+                          href={`/post/${post.id}`}
+                          className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 border-r border-gray-100 transition-all"
+                        >
+                          <MessageSquare size={17} />
+                          <span className="text-xs">Comentar</span>
+                        </Link>
 
-                    <Link
-                      href={`/post/${post.id}`}
-                      className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 border-l border-r border-gray-100 transition-all"
-                    >
-                      <MessageSquare size={17} />
-                      <span className="text-xs">Comentar</span>
-                    </Link>
+                        <button
+                          onClick={() => handleShare(post.id)}
+                          className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 transition-all"
+                        >
+                          <Share2 size={17} />
+                          <span className="text-xs">Compartir</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <ReactionPicker
+                          onSelect={t => handleToggleReaction(post.id, t)}
+                          disabled={!userId}
+                          currentReaction={myR}
+                        >
+                          <button className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-all hover:bg-gray-50 active:bg-gray-100 ${myR ? "text-gold" : "text-navy-dark/50"}`}>
+                            <span className="text-xl leading-none">{myR ? emojiMap[myR] : "👍"}</span>
+                            <span className="text-xs">{myR ? labelMap[myR] : "Me gusta"}</span>
+                          </button>
+                        </ReactionPicker>
 
-                    <button
-                      onClick={() => handleShare(post.id)}
-                      className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 transition-all"
-                    >
-                      <Share2 size={17} />
-                      <span className="text-xs">Compartir</span>
-                    </button>
+                        <Link
+                          href={`/post/${post.id}`}
+                          className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 border-l border-r border-gray-100 transition-all"
+                        >
+                          <MessageSquare size={17} />
+                          <span className="text-xs">Comentar</span>
+                        </Link>
+
+                        <button
+                          onClick={() => handleShare(post.id)}
+                          className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-navy-dark/50 hover:bg-gray-50 transition-all"
+                        >
+                          <Share2 size={17} />
+                          <span className="text-xs">Compartir</span>
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {/* Comments section */}

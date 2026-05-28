@@ -283,6 +283,27 @@ export default function HabitsSection({
         setMyPoints((p: number) => p + result.points_awarded);
       }
 
+      // Auto-publicar en el muro de comunidad si es completado por primera vez hoy
+      if (result?.ok && !result?.already_logged) {
+        const uName = profile?.full_name || profile?.username || "Un agente";
+        const streakVal = result.streak || 1;
+        
+        const postContent = `🎯 [HABIT_COMPLETE]:${JSON.stringify({
+          user_name: uName,
+          category: habit.category,
+          icon: habit.icon,
+          color: habit.color,
+          streak: streakVal
+        })}`;
+        
+        // Insertar en la tabla de posts de forma pública
+        await supabase.from("posts").insert({
+          author_id: userId,
+          content: postContent,
+          is_anonymous: false
+        });
+      }
+
       // Check if all habits completed → big confetti
       const newCompletedCount = completedCount + 1;
       if (newCompletedCount >= todayHabits.length && todayHabits.length > 1) {
@@ -794,11 +815,22 @@ export default function HabitsSection({
               return (
                 <div
                   key={habit.id}
-                  className={`relative rounded-2xl border transition-all overflow-hidden group ${
+                  className={`relative rounded-3xl border transition-all duration-300 overflow-hidden group ${
                     isCompleted
-                      ? "bg-green-50/50 border-green-200/50"
-                      : "bg-white border-light-gray hover:border-gold/30 hover:shadow-md"
+                      ? "hover:shadow-md"
+                      : "hover:shadow-lg hover:-translate-y-[1px]"
                   }`}
+                  style={
+                    isCompleted
+                      ? {
+                          background: `linear-gradient(135deg, #10B98110, #10B98104)`,
+                          borderColor: "#10B98135",
+                        }
+                      : {
+                          background: `linear-gradient(135deg, ${habit.color}08, ${habit.color}02)`,
+                          borderColor: habit.color + "20",
+                        }
+                  }
                 >
                   <div className="flex items-center gap-3 p-4">
                     {/* Check button */}
@@ -892,7 +924,7 @@ export default function HabitsSection({
 
                   {/* Color accent bar */}
                   <div
-                    className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+                    className="absolute left-0 top-0 bottom-0 w-1 rounded-l-3xl"
                     style={{ backgroundColor: isCompleted ? "#10B981" : habit.color }}
                   />
                 </div>
