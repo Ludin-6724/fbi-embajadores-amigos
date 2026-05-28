@@ -54,8 +54,10 @@ BEGIN
     FROM public.profiles WHERE id = actor_id_val;
 
     -- Anonimato
-    IF (TG_TABLE_NAME IN ('comments', 'posts') AND NEW.is_anonymous = true) THEN
-        actor_name := 'Agente Anónimo';
+    IF (TG_TABLE_NAME = 'comments' OR TG_TABLE_NAME = 'posts') THEN
+        IF (NEW.is_anonymous = true) THEN
+            actor_name := 'Agente Anónimo';
+        END IF;
     END IF;
 
     -- Lógica según la tabla que dispara el trigger
