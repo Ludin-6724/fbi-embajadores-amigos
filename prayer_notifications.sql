@@ -68,7 +68,6 @@ BEGIN
 
         INSERT INTO public.notifications (user_id, actor_id, type, message, link)
         VALUES (target_user_id, NEW.author_id, 'comment', actor_name || ' comentó en tu publicación: "' || post_snippet || '..."', '#post-' || NEW.post_id);
-
     ELSIF (TG_TABLE_NAME = 'posts') THEN
         -- Cuando se publica un nuevo post global
         IF (NEW.community_id IS NULL) THEN
@@ -88,6 +87,10 @@ BEGIN
                     INSERT INTO public.notifications (user_id, actor_id, type, message, link)
                     VALUES (NULL, NEW.author_id, 'global_post', '🆘 ' || actor_name || ' necesita refuerzo en oración. ¡Acude al llamado!', '/post/' || NEW.id);
                 END IF;
+            -- Petición de oración contestada: notificar a todos (testimonio festivo)
+            ELSIF (NEW.content LIKE '🎉 [PRAYER_ANSWERED]%') THEN
+                INSERT INTO public.notifications (user_id, actor_id, type, message, link)
+                VALUES (NULL, NEW.author_id, 'global_post', '🎉 ¡Gloria a Dios! La petición de ' || actor_name || ' fue contestada. ¡Gracias por tus oraciones! 🙌', '/post/' || NEW.id);
             ELSE
                 INSERT INTO public.notifications (user_id, actor_id, type, message, link)
                 VALUES (NULL, NEW.author_id, 'global_post', actor_name || ' ha publicado algo en el Muro.', '/post/' || NEW.id);

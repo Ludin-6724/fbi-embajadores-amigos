@@ -96,6 +96,8 @@ export default function Comunidad({
   const [isComposing, setIsComposing] = useState(false);
   const [isSubmittingReinforcement, setIsSubmittingReinforcement] = useState<string | null>(null);
   const [inlinePrayerVisibility, setInlinePrayerVisibility] = useState<"public" | "anonymous" | "private">("anonymous");
+  const [prayerTab, setPrayerTab] = useState<"active" | "answered" | "private">("active");
+  const [answeredSubTab, setAnsweredSubTab] = useState<"general" | "private">("general");
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -595,6 +597,51 @@ export default function Comunidad({
     }
   };
 
+  const handleMarkAsAnswered = async (post: Post, meta: any) => {
+    if (!userId) { showToast("Inicia sesión", false); return; }
+    try {
+      // 1. Update the original post to mark as answered
+      const updatedMeta = { ...meta, is_answered: true };
+      const updatedContent = `🙏 [PRAYER_REQUEST]:${JSON.stringify(updatedMeta)}`;
+
+      const { error: updateError } = await sbRef.current
+        .from("posts")
+        .update({ content: updatedContent })
+        .eq("id", post.id);
+
+      if (updateError) throw updateError;
+
+      // 2. If NOT private, publish celebration post in the muro!
+      if (!meta.is_private) {
+        const authorName = initialProfile?.full_name || initialProfile?.username || "Agente";
+        const answeredMeta = {
+          text: meta.text,
+          author_name: authorName,
+          is_anonymous: meta.is_anonymous,
+          original_post_id: post.id
+        };
+        const answeredPostContent = `🎉 [PRAYER_ANSWERED]:${JSON.stringify(answeredMeta)}`;
+
+        const { error: insertError } = await sbRef.current
+          .from("posts")
+          .insert({
+            author_id: userId,
+            content: answeredPostContent,
+            is_anonymous: meta.is_anonymous,
+            community_id: post.community_id || null
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      showToast("¡Gloria a Dios! Petición contestada. 🎉");
+      fetchPosts(0, false);
+      window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, false);
+    }
+  };
+
   // Helper: parse prayer metadata from post content
   const parsePrayerMeta = (content: string): { type: "request" | "reinforcement"; meta: any } | null => {
     if (content.startsWith("🙏 [PRAYER_REQUEST]:")) {
@@ -602,6 +649,14 @@ export default function Comunidad({
     }
     if (content.startsWith("🆘 [PRAYER_REINFORCEMENT]:")) {
       try { return { type: "reinforcement", meta: JSON.parse(content.substring(26)) }; } catch { return null; }
+    }
+    return null;
+  };
+
+  // Helper: parse answered prayer metadata
+  const parseAnsweredPrayerMeta = (content: string): { text: string; author_name: string; is_anonymous: boolean; original_post_id?: string } | null => {
+    if (content.startsWith("🎉 [PRAYER_ANSWERED]:")) {
+      try { return JSON.parse(content.substring(21)); } catch { return null; }
     }
     return null;
   };
@@ -765,6 +820,70 @@ export default function Comunidad({
               </div>
             )}
 
+            {/* Sub-tabs for Oración */}
+            {activeTab === "oratorio" && (
+              <div className="flex flex-col gap-3 mb-6 animate-fade-in">
+                <div className="flex justify-center p-1 bg-gray-100/80 rounded-2xl border border-gray-200/50 max-w-md mx-auto w-full">
+                  <button
+                    onClick={() => setPrayerTab("active")}
+                    className={`flex-1 py-2 px-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all duration-200 ${
+                      prayerTab === "active"
+                        ? "bg-white text-navy-dark border border-gray-200/30 shadow-sm"
+                        : "text-navy-dark/50 hover:text-navy-dark/80"
+                    }`}
+                  >
+                    Activas
+                  </button>
+                  <button
+                    onClick={() => setPrayerTab("answered")}
+                    className={`flex-1 py-2 px-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all duration-200 ${
+                      prayerTab === "answered"
+                        ? "bg-white text-navy-dark border border-gray-200/30 shadow-sm"
+                        : "text-navy-dark/50 hover:text-navy-dark/80"
+                    }`}
+                  >
+                    Contestadas
+                  </button>
+                  <button
+                    onClick={() => setPrayerTab("private")}
+                    className={`flex-1 py-2 px-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all duration-200 ${
+                      prayerTab === "private"
+                        ? "bg-white text-navy-dark border border-gray-200/30 shadow-sm"
+                        : "text-navy-dark/50 hover:text-navy-dark/80"
+                    }`}
+                  >
+                    Privadas
+                  </button>
+                </div>
+
+                {/* Sub-menu when Contestadas is active */}
+                {prayerTab === "answered" && (
+                  <div className="flex justify-center gap-4 text-[11px] font-bold animate-fade-in mt-1">
+                    <button
+                      onClick={() => setAnsweredSubTab("general")}
+                      className={`pb-1 border-b-2 transition-all ${
+                        answeredSubTab === "general"
+                          ? "border-gold text-navy-dark font-extrabold"
+                          : "border-transparent text-navy-dark/40 hover:text-navy-dark/60"
+                      }`}
+                    >
+                      Generales
+                    </button>
+                    <button
+                      onClick={() => setAnsweredSubTab("private")}
+                      className={`pb-1 border-b-2 transition-all ${
+                        answeredSubTab === "private"
+                          ? "border-gold text-navy-dark font-extrabold"
+                          : "border-transparent text-navy-dark/40 hover:text-navy-dark/60"
+                      }`}
+                    >
+                      Privadas
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Inline Post Trigger (Fake Box) — Only for Muro tab */}
             {!postId && inlinePostContent.trim() === "" && activeTab !== "oratorio" && !isComposing && (
               <div 
@@ -864,13 +983,34 @@ export default function Comunidad({
               if (activeTab === "oratorio") {
                 // Oración tab: Only show prayer posts
                 if (!prayer) return false;
-                // Private prayers: only visible to the author
-                if (prayer.meta?.is_private && post.author_id !== userId) return false;
-                return true;
+
+                const pm = prayer.meta;
+                const isAnswered = pm?.is_answered === true;
+                const isPrivate = pm?.is_private === true;
+
+                if (prayerTab === "active") {
+                  // Active petitions: public or anonymous, and NOT answered
+                  return !isAnswered && !isPrivate;
+                } else if (prayerTab === "answered") {
+                  // Answered petitions
+                  if (!isAnswered) return false;
+
+                  if (answeredSubTab === "general") {
+                    // Public or anonymous answered
+                    return !isPrivate;
+                  } else {
+                    // Private answered: only visible to the author
+                    return isPrivate && userId && post.author_id === userId;
+                  }
+                } else if (prayerTab === "private") {
+                  // Private petitions: both active and answered, but only for the author
+                  return isPrivate && userId && post.author_id === userId;
+                }
+                return false;
               } else {
                 // Muro tab: Show everything EXCEPT private prayers from other users, and old anonymous posts that are NOT prayer requests
                 if (prayer) {
-                  if (prayer.meta?.is_private && post.author_id !== userId) return false;
+                  if (prayer.meta?.is_private && (!userId || post.author_id !== userId)) return false;
                   return true; // Show prayer posts in the muro too
                 }
                 // Regular post: skip anonymous ones (legacy oratorio posts)
@@ -1020,6 +1160,14 @@ export default function Comunidad({
                                 </div>
                               )}
 
+                              {/* Answered badge */}
+                              {pm.is_answered && (
+                                <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full w-fit">
+                                  <span className="text-[10px] leading-none">🎉</span>
+                                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">¡Petición Contestada! Gloria a Dios</span>
+                                </div>
+                              )}
+
                               {/* Private badge */}
                               {pm.is_private && (
                                 <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 bg-navy-dark/5 border border-navy-dark/10 rounded-full w-fit">
@@ -1034,47 +1182,95 @@ export default function Comunidad({
                               </p>
 
                               {/* Praying button + count */}
-                              <div className="pt-4 mt-4 border-t border-navy-dark/5 flex flex-col items-center gap-3">
-                                <button
-                                  onClick={() => handleToggleReaction(post.id, "amen")}
-                                  className={`py-2.5 px-5 rounded-full font-sans font-extrabold text-[11px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2.5 shadow-sm border ${
-                                    hasPrayed
-                                      ? "bg-navy-dark/5 text-navy-dark border-navy-dark/15"
-                                      : "bg-gold/8 text-gold border-gold/20 hover:bg-gold hover:text-white hover:border-gold shadow-gold/5"
-                                  }`}
-                                >
-                                  <span className="text-lg leading-none">🙏</span>
-                                  {hasPrayed
-                                    ? (totalPraying === 1 ? "Estás orando" : `Orando (${totalPraying})`)
-                                    : "Orar por esta petición"
-                                  }
-                                </button>
+                              <div className="pt-4 mt-4 border-t border-navy-dark/5 flex flex-col items-center gap-3 w-full">
+                                {pm.is_answered ? (
+                                  <div className="flex flex-col items-center gap-2 py-3 px-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center w-full max-w-sm">
+                                    <span className="text-xl animate-bounce">🙌</span>
+                                    <p className="text-xs font-sans font-extrabold text-amber-700 uppercase tracking-wider">¡Testimonio Confirmado!</p>
+                                    <p className="text-[11px] text-amber-800/80 font-medium">Esta petición ha sido contestada. ¡Agradecemos a Dios por responder esta oración!</p>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handleToggleReaction(post.id, "amen")}
+                                      className={`py-2.5 px-5 rounded-full font-sans font-extrabold text-[11px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2.5 shadow-sm border ${
+                                        hasPrayed
+                                          ? "bg-navy-dark/5 text-navy-dark border-navy-dark/15"
+                                          : "bg-gold/8 text-gold border-gold/20 hover:bg-gold hover:text-white hover:border-gold shadow-gold/5"
+                                      }`}
+                                    >
+                                      <span className="text-lg leading-none">🙏</span>
+                                      {hasPrayed
+                                        ? (totalPraying === 1 ? "Estás orando" : `Orando (${totalPraying})`)
+                                        : "Orar por esta petición"
+                                      }
+                                    </button>
 
-                                {totalPraying > 0 && (
-                                  <p className="text-[11px] text-navy-dark/40 font-sans font-medium">
-                                    {totalPraying === 1 ? "1 persona orando" : `${totalPraying} personas orando`}
-                                    {hasPrayed ? " · incluido tú" : ""}
-                                  </p>
+                                    {totalPraying > 0 && (
+                                      <p className="text-[11px] text-navy-dark/40 font-sans font-medium">
+                                        {totalPraying === 1 ? "1 persona orando" : `${totalPraying} personas orando`}
+                                        {hasPrayed ? " · incluido tú" : ""}
+                                      </p>
+                                    )}
+
+                                    {!hasPrayed && (
+                                      <p className="text-[10px] text-navy-dark/30 font-sans italic">
+                                        Haz una oración real donde estés, aunque sea breve. Con fe.
+                                      </p>
+                                    )}
+                                  </>
                                 )}
 
-                                {!hasPrayed && (
-                                  <p className="text-[10px] text-navy-dark/30 font-sans italic">
-                                    Haz una oración real donde estés, aunque sea breve. Con fe.
-                                  </p>
-                                )}
+                                {/* Actions for author: Reinforcement + Mark as Answered */}
+                                {isMyPost && (
+                                  <div className="flex flex-col sm:flex-row gap-2 w-full justify-center mt-2">
+                                    {/* Reinforcement button — only for active requests */}
+                                    {!isReinforcement && !pm.is_answered && (
+                                      <button
+                                        onClick={() => handlePrayerReinforcement(post)}
+                                        disabled={isSubmittingReinforcement === post.id}
+                                        className="py-2 px-4 rounded-full font-sans font-extrabold text-[10px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border border-gold/30 bg-gold/10 text-gold hover:bg-gold hover:text-white shadow-sm flex-1"
+                                      >
+                                        <Megaphone size={12} className={isSubmittingReinforcement === post.id ? "animate-pulse" : ""} />
+                                        {isSubmittingReinforcement === post.id ? "Enviando..." : "Pedir refuerzo"}
+                                      </button>
+                                    )}
 
-                                {/* Reinforcement button — only for the prayer author, only on original requests */}
-                                {isMyPost && !isReinforcement && (
-                                  <button
-                                    onClick={() => handlePrayerReinforcement(post)}
-                                    disabled={isSubmittingReinforcement === post.id}
-                                    className="mt-2 py-2.5 px-5 rounded-full font-sans font-extrabold text-[11px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2 border border-gold/30 bg-gold/10 text-gold hover:bg-gold hover:text-white shadow-sm"
-                                  >
-                                    <Megaphone size={14} className={isSubmittingReinforcement === post.id ? "animate-pulse" : ""} />
-                                    {isSubmittingReinforcement === post.id ? "Enviando..." : "Pedir refuerzo en oración"}
-                                  </button>
+                                    {/* Mark as answered button — only for active requests */}
+                                    {!pm.is_answered && (
+                                      <button
+                                        onClick={() => handleMarkAsAnswered(post, pm)}
+                                        className="py-2 px-4 rounded-full font-sans font-extrabold text-[10px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-500 hover:text-white hover:border-amber-500 shadow-sm flex-1"
+                                      >
+                                        <span>🎉</span> ¡Contestada!
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
+                            </div>
+                          );
+                        }
+
+                        const answeredPrayer = parseAnsweredPrayerMeta(post.content);
+                        if (answeredPrayer) {
+                          const isAnonymous = answeredPrayer.is_anonymous;
+                          const answeredName = isAnonymous ? "Agente Anónimo" : (answeredPrayer.author_name || name);
+                          return (
+                            <div className="bg-gradient-to-br from-amber-50/50 to-orange-50/50 border border-amber-200/40 rounded-2xl p-5 relative overflow-hidden transition-all animate-fade-in mt-1 mb-2 shadow-sm">
+                              <div className="absolute top-2 right-2 text-2xl animate-bounce">🎉</div>
+                              <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 bg-amber-100/50 border border-amber-200/50 rounded-full w-fit">
+                                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">¡Petición Contestada! 🎉</span>
+                              </div>
+                              <p className="text-amber-950 font-sans font-extrabold text-base mb-2 leading-snug">
+                                {isAnonymous ? "¡Una petición de oración fue contestada!" : `¡La petición de ${answeredName} fue contestada!`}
+                              </p>
+                              <div className="pl-3.5 border-l-2 border-amber-300 text-amber-900/80 text-sm italic mb-4 whitespace-pre-wrap font-sans leading-relaxed">
+                                "{answeredPrayer.text}"
+                              </div>
+                              <p className="text-amber-900 font-extrabold text-sm text-center animate-pulse mt-2">
+                                ¡Gloria a Dios por eso, gracias por tus oraciones! 🙌✨
+                              </p>
                             </div>
                           );
                         }
