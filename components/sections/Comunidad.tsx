@@ -953,7 +953,7 @@ export default function Comunidad({
                           : "border-transparent text-navy-dark/40 hover:text-navy-dark/60"
                       }`}
                     >
-                      Privadas
+                      Personales
                     </button>
                   </div>
                 )}
@@ -1065,24 +1065,25 @@ export default function Comunidad({
                 const isPrivate = pm?.is_private === true;
 
                 if (prayerTab === "active") {
-                  // Active petitions: with general/private sub-tabs
+                  // Active petitions: with general/personales sub-tabs
                   if (isAnswered) return false;
 
                   if (activeSubTab === "general") {
                     return !isPrivate;
                   } else {
-                    return isPrivate && userId && post.author_id === userId;
+                    // Personales: all active petitions created by the user (whether public, anonymous, or private)
+                    return userId && post.author_id === userId;
                   }
                 } else if (prayerTab === "answered") {
-                  // Answered petitions
+                  // Answered petitions: with general/personales sub-tabs
                   if (!isAnswered) return false;
 
                   if (answeredSubTab === "general") {
                     // Public or anonymous answered
                     return !isPrivate;
                   } else {
-                    // Private answered: only visible to the author
-                    return isPrivate && userId && post.author_id === userId;
+                    // Personales: all answered petitions created by the user (whether public, anonymous, or private)
+                    return userId && post.author_id === userId;
                   }
                 } else if (prayerTab === "private") {
                   // Private petitions: both active and answered, but only for the author
