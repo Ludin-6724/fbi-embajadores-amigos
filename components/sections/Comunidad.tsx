@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X, Sparkles, Flame } from "lucide-react";
+import { Fingerprint, MessageSquare, Loader2, ChevronRight, Share2, MoreHorizontal, Pen, Trash2, CornerDownRight, X, Sparkles, Flame, Megaphone, Heart, Globe, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ReactionPicker, { ReactionType } from "@/components/ui/ReactionPicker";
 import Link from "next/link";
@@ -94,6 +94,8 @@ export default function Comunidad({
   const [isSubmittingInline, setIsSubmittingInline] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [isComposing, setIsComposing] = useState(false);
+  const [isSubmittingReinforcement, setIsSubmittingReinforcement] = useState<string | null>(null);
+  const [inlinePrayerVisibility, setInlinePrayerVisibility] = useState<"public" | "anonymous" | "private">("anonymous");
   const pageSize = 15;
 
   // Stable ref to supabase — never changes, never triggers re-renders
@@ -204,10 +206,11 @@ export default function Comunidad({
       } else if (authorId) {
         q = q.eq("author_id", authorId).neq("is_anonymous", true);
       } else {
-        if (activeTab === "oratorio") q = q.eq("is_anonymous", true);
-        else q = q.neq("is_anonymous", true);
+        // Oratorio tab: show only prayer posts
+        // Muro tab: show everything except prayer-only anonymous posts
         if (communityId) q = q.eq("community_id", communityId);
         else q = q.is("community_id", null);
+        // No filter by is_anonymous anymore — we filter client-side for prayer vs regular posts
       }
 
       const { data, error: qError } = await q as { data: any; error: any };
@@ -270,31 +273,28 @@ export default function Comunidad({
         },
         async (payload: { new: any }) => {
           const newPost = payload.new as any;
-          // Only add if it matches the current tab's anonymity
-          const matchesTab = activeTab === 'oratorio' ? newPost.is_anonymous : !newPost.is_anonymous;
           
-          if (matchesTab) {
-            // Fetch the profile for the new post to show name/avatar
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('username, full_name, avatar_url')
-              .eq('id', newPost.author_id)
-              .single();
-            
-            const postWithProfile: Post = {
-              ...newPost,
-              profiles: profile,
-              post_reactions: []
-            };
+          // Always add the post — client-side filtering handles tab separation
+          // Fetch the profile for the new post to show name/avatar
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('username, full_name, avatar_url')
+            .eq('id', newPost.author_id)
+            .single();
+          
+          const postWithProfile: Post = {
+            ...newPost,
+            profiles: profile,
+            post_reactions: []
+          };
 
-            setPosts(prev => {
-              if (prev.find(p => p.id === postWithProfile.id)) return prev;
-              const next = [postWithProfile, ...prev];
-              // Update cache with the new post
-              if (!postId) cache.set(`posts_${activeTab}_${communityId || 'global'}`, next.slice(0, 50));
-              return next;
-            });
-          }
+          setPosts(prev => {
+            if (prev.find(p => p.id === postWithProfile.id)) return prev;
+            const next = [postWithProfile, ...prev];
+            // Update cache with the new post
+            if (!postId) cache.set(`posts_${activeTab}_${communityId || 'global'}`, next.slice(0, 50));
+            return next;
+          });
         }
       )
       .on(
@@ -508,18 +508,38 @@ export default function Comunidad({
 
     setIsSubmittingInline(true);
     try {
-      const { error } = await sbRef.current.from("posts").insert({
-        author_id: userId,
-        content: inlinePostContent.trim(),
-        is_anonymous: activeTab === "oratorio",
-        community_id: communityId || null
-      });
+      if (activeTab === "oratorio") {
+        // Create prayer request from inline composer
+        const authorName = initialProfile?.full_name || initialProfile?.username || "Agente";
+        const meta = {
+          text: inlinePostContent.trim(),
+          author_name: authorName,
+          is_anonymous: inlinePrayerVisibility === "anonymous",
+          is_private: inlinePrayerVisibility === "private",
+        };
+        const postContent = `🙏 [PRAYER_REQUEST]:${JSON.stringify(meta)}`;
 
-      if (error) throw error;
+        const { error } = await sbRef.current.from("posts").insert({
+          author_id: userId,
+          content: postContent,
+          is_anonymous: inlinePrayerVisibility === "anonymous",
+          community_id: communityId || null
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await sbRef.current.from("posts").insert({
+          author_id: userId,
+          content: inlinePostContent.trim(),
+          is_anonymous: false,
+          community_id: communityId || null
+        });
+        if (error) throw error;
+      }
 
       setInlinePostContent("");
       setIsComposing(false);
-      showToast("¡Publicado correctamente!");
+      setInlinePrayerVisibility("anonymous");
+      showToast(activeTab === "oratorio" ? "¡Petición enviada! 🙏" : "¡Publicado correctamente!");
       fetchPosts(0, false);
       window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
     } catch (err: any) {
@@ -528,6 +548,65 @@ export default function Comunidad({
       setIsSubmittingInline(false);
     }
   };
+
+  const handlePrayerReinforcement = async (originalPost: Post) => {
+    if (!userId) { showToast("Inicia sesión", false); return; }
+    if (isSubmittingReinforcement) return;
+
+    setIsSubmittingReinforcement(originalPost.id);
+    try {
+      // Parse original prayer metadata
+      let originalMeta: any = null;
+      if (originalPost.content.startsWith("🙏 [PRAYER_REQUEST]:")) {
+        try { originalMeta = JSON.parse(originalPost.content.substring(20)); } catch {}
+      }
+
+      const authorName = initialProfile?.full_name || initialProfile?.username || "Agente";
+      const prayerText = originalMeta?.text || originalPost.content;
+      const isAnonymous = originalMeta?.is_anonymous ?? originalPost.is_anonymous;
+      const isPrivate = originalMeta?.is_private ?? false;
+
+      const meta = {
+        original_post_id: originalPost.id,
+        text: prayerText,
+        author_name: isAnonymous ? "Agente Anónimo" : authorName,
+        is_anonymous: isAnonymous,
+        is_private: isPrivate,
+      };
+
+      const postContent = `🆘 [PRAYER_REINFORCEMENT]:${JSON.stringify(meta)}`;
+
+      const { error } = await sbRef.current.from("posts").insert({
+        author_id: userId,
+        content: postContent,
+        is_anonymous: isAnonymous,
+        community_id: communityId || null
+      });
+
+      if (error) throw error;
+
+      showToast("¡Refuerzo enviado! La comunidad ha sido notificada 🙏");
+      fetchPosts(0, false);
+      window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, false);
+    } finally {
+      setIsSubmittingReinforcement(null);
+    }
+  };
+
+  // Helper: parse prayer metadata from post content
+  const parsePrayerMeta = (content: string): { type: "request" | "reinforcement"; meta: any } | null => {
+    if (content.startsWith("🙏 [PRAYER_REQUEST]:")) {
+      try { return { type: "request", meta: JSON.parse(content.substring(20)) }; } catch { return null; }
+    }
+    if (content.startsWith("🆘 [PRAYER_REINFORCEMENT]:")) {
+      try { return { type: "reinforcement", meta: JSON.parse(content.substring(26)) }; } catch { return null; }
+    }
+    return null;
+  };
+
+  const isPrayerPost = (content: string) => content.startsWith("🙏 [PRAYER_REQUEST]:") || content.startsWith("🆘 [PRAYER_REINFORCEMENT]:");
 
   const handleEditComment = async (cId: string, pId: string) => {
     if (!editContent.trim()) return;
@@ -667,16 +746,26 @@ export default function Comunidad({
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gold/5 rounded-bl-full pointer-events-none" />
                 <h3 className="font-serif text-2xl font-bold text-navy-dark mb-2">Peticiones de Oración</h3>
                 <p className="text-[12px] text-navy-dark/70 font-sans max-w-sm mx-auto leading-relaxed mb-3">
-                  No hay agentes solitarios, comparte tus luchas y ora por las demás de manera real.
+                  No hay agentes solitarios, comparte tus luchas y ora por los demás de manera real.
                 </p>
                 <p className="text-sm font-sans italic max-w-sm mx-auto leading-relaxed text-gold font-medium">
-                  "Y todo lo que pidiereis en oración, creyendo, lo recibiréis."
+                  &quot;Y todo lo que pidiereis en oración, creyendo, lo recibiréis.&quot;
                 </p>
-                <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-widest mt-2">Mateo 21:22 (RVR1960)</p>
+                <p className="text-[10px] font-bold text-navy-dark/40 uppercase tracking-widest mt-2 mb-4">Mateo 21:22 (RVR1960)</p>
+                <button
+                  onClick={() => {
+                    setIsComposing(true);
+                    setTimeout(() => document.getElementById("inline-real-content")?.focus(), 100);
+                  }}
+                  className="px-6 py-3 bg-navy-dark text-white rounded-full text-sm font-bold hover:bg-gold hover:text-navy-dark transition-all shadow-md active:scale-95 inline-flex items-center gap-2"
+                >
+                  <Heart size={16} />
+                  Crear Petición de Oración
+                </button>
               </div>
             )}
 
-            {/* Inline Post Trigger (Fake Box) */}
+            {/* Inline Post Trigger (Fake Box) — Only for Muro tab */}
             {!postId && inlinePostContent.trim() === "" && activeTab !== "oratorio" && !isComposing && (
               <div 
                 className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-gray-100 p-4 mb-4 flex gap-3 items-center cursor-pointer hover:bg-gray-50/50 transition-colors"
@@ -697,28 +786,63 @@ export default function Comunidad({
               </div>
             )}
 
-            {/* Always mount the actual TextArea but only show it if they are typing OR selected an option OR are in Oratorio */}
-            {!postId && (inlinePostContent.trim() !== "" || isComposing || activeTab === "oratorio") && (
+            {/* Inline Composer — For Muro and Oración */}
+            {!postId && (inlinePostContent.trim() !== "" || isComposing) && (
               <div className={`bg-white rounded-2xl shadow-sm border border-gold/20 p-4 mb-4 flex gap-3 items-start animate-fade-in`}>
                 <div className="w-10 h-10 rounded-full bg-cream border border-gold/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {initialProfile?.avatar_url && activeTab !== "oratorio"
+                  {activeTab === "oratorio" && inlinePrayerVisibility !== "public"
+                    ? <span className="font-bold text-gold text-sm"><Fingerprint size={18} /></span>
+                    : initialProfile?.avatar_url
                     ? <img src={initialProfile.avatar_url} className="w-full h-full object-cover" alt="" />
-                    : <span className="font-bold text-gold text-sm">{activeTab === "oratorio" ? <Fingerprint size={18} /> : (initialProfile?.full_name?.[0] || "A")}</span>
+                    : <span className="font-bold text-gold text-sm">{initialProfile?.full_name?.[0] || "A"}</span>
                   }
                 </div>
                 <div className="flex-1 flex flex-col gap-2">
+                  {/* Prayer visibility selector — only in oratorio */}
+                  {activeTab === "oratorio" && (
+                    <div className="flex gap-1.5 mb-1">
+                      <button
+                        onClick={() => setInlinePrayerVisibility("public")}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-bold transition-all border ${
+                          inlinePrayerVisibility === "public" ? "border-gold bg-gold/10 text-gold" : "border-gray-200 text-navy-dark/40 hover:border-gold/30"
+                        }`}
+                      >
+                        <Globe size={11} /> Público
+                      </button>
+                      <button
+                        onClick={() => setInlinePrayerVisibility("anonymous")}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-bold transition-all border ${
+                          inlinePrayerVisibility === "anonymous" ? "border-gold bg-gold/10 text-gold" : "border-gray-200 text-navy-dark/40 hover:border-gold/30"
+                        }`}
+                      >
+                        <Fingerprint size={11} /> Anónimo
+                      </button>
+                      <button
+                        onClick={() => setInlinePrayerVisibility("private")}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-bold transition-all border ${
+                          inlinePrayerVisibility === "private" ? "border-gold bg-gold/10 text-gold" : "border-gray-200 text-navy-dark/40 hover:border-gold/30"
+                        }`}
+                      >
+                        <Lock size={11} /> Privado
+                      </button>
+                    </div>
+                  )}
                   <textarea
                     id="inline-real-content"
                     value={inlinePostContent}
                     onChange={e => setInlinePostContent(e.target.value)}
-                    placeholder={activeTab === "muro" ? "Continúa tu publicación aquí... (puedes pegar un link de YouTube y se reproducirá en el post)" : "Escribe tu petición de forma anónima..."}
+                    placeholder={
+                      activeTab === "oratorio"
+                        ? (inlinePrayerVisibility === "private" ? "Escribe tu petición personal. Solo tú la verás..." : "Escribe tu petición de oración...")
+                        : "Continúa tu publicación aquí... (puedes pegar un link de YouTube y se reproducirá en el post)"
+                    }
                     className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gold/50 focus:ring-1 focus:ring-gold/30 resize-none transition-all"
                     rows={inlinePostContent.includes('\n') ? 4 : 2}
                     autoFocus
                   />
                   {inlinePostContent.trim() && (
                     <div className="flex justify-between items-center animate-in fade-in pt-1">
-                      <button onClick={() => { setInlinePostContent(''); setIsComposing(false); }} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
+                      <button onClick={() => { setInlinePostContent(''); setIsComposing(false); setInlinePrayerVisibility("anonymous"); }} className="text-[10px] uppercase font-bold text-gray-400 hover:text-red-500">
                         Cancelar
                       </button>
                       <button 
@@ -726,7 +850,7 @@ export default function Comunidad({
                         disabled={isSubmittingInline}
                         className="px-5 py-2 bg-navy-dark text-white rounded-full text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 active:scale-95 transition-all shadow-md hover:bg-gold hover:text-navy-dark"
                       >
-                        {isSubmittingInline ? "Publicando..." : "Publicar"}
+                        {isSubmittingInline ? "Enviando..." : (activeTab === "oratorio" ? "Enviar Petición 🙏" : "Publicar")}
                       </button>
                     </div>
                   )}
@@ -734,8 +858,26 @@ export default function Comunidad({
               </div>
             )}
 
-            {/* Posts */}
-            {posts.map(post => {
+            {/* Posts — Client-side filtering */}
+            {posts.filter(post => {
+              const prayer = parsePrayerMeta(post.content);
+              if (activeTab === "oratorio") {
+                // Oración tab: Only show prayer posts
+                if (!prayer) return false;
+                // Private prayers: only visible to the author
+                if (prayer.meta?.is_private && post.author_id !== userId) return false;
+                return true;
+              } else {
+                // Muro tab: Show everything EXCEPT private prayers from other users, and old anonymous posts that are NOT prayer requests
+                if (prayer) {
+                  if (prayer.meta?.is_private && post.author_id !== userId) return false;
+                  return true; // Show prayer posts in the muro too
+                }
+                // Regular post: skip anonymous ones (legacy oratorio posts)
+                if (post.is_anonymous) return false;
+                return true;
+              }
+            }).map(post => {
               const name = post.is_anonymous ? "Agente Anónimo" : (post.profiles?.full_name || post.profiles?.username || "Agente");
               const myR = post.post_reactions.find(r => r.user_id === userId)?.reaction;
               const totalReactions = post.post_reactions.length;
@@ -743,6 +885,7 @@ export default function Comunidad({
               const previews = commentPreviews[post.id] ?? [];
               const commentCount = commentCounts[post.id] ?? 0;
               const extraComments = Math.max(0, commentCount - previews.length);
+              const prayerData = parsePrayerMeta(post.content);
 
               return (
                 <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100">
@@ -844,6 +987,98 @@ export default function Comunidad({
                       </div>
                     ) : (
                       (() => {
+                        // PRAYER_REQUEST and PRAYER_REINFORCEMENT rendering
+                        if (prayerData) {
+                          const pm = prayerData.meta;
+                          const isReinforcement = prayerData.type === "reinforcement";
+                          const prayerName = pm.is_anonymous ? "Agente Anónimo" : (pm.author_name || name);
+                          const amenReactions = post.post_reactions.filter(r => r.reaction === "amen");
+                          
+                          // For reinforcements, we sum from original post too
+                          let totalPraying = amenReactions.length;
+                          if (isReinforcement && pm.original_post_id) {
+                            const originalPost = posts.find(p => p.id === pm.original_post_id);
+                            if (originalPost) {
+                              totalPraying += originalPost.post_reactions.filter(r => r.reaction === "amen").length;
+                            }
+                          }
+                          
+                          const hasPrayed = amenReactions.some(r => r.user_id === userId);
+                          const isMyPost = post.author_id === userId;
+
+                          return (
+                            <div className={`rounded-2xl p-5 relative overflow-hidden border transition-all animate-fade-in mt-1 mb-2 ${
+                              isReinforcement 
+                                ? "bg-cream/60 border-gold/30" 
+                                : "bg-white border-gray-100"
+                            }`}>
+                              {/* Reinforcement badge */}
+                              {isReinforcement && (
+                                <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 bg-gold/10 border border-gold/20 rounded-full w-fit">
+                                  <Megaphone size={12} className="text-gold" />
+                                  <span className="text-[10px] font-bold text-gold uppercase tracking-wider">Refuerzo en Oración</span>
+                                </div>
+                              )}
+
+                              {/* Private badge */}
+                              {pm.is_private && (
+                                <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 bg-navy-dark/5 border border-navy-dark/10 rounded-full w-fit">
+                                  <Lock size={12} className="text-navy-dark/50" />
+                                  <span className="text-[10px] font-bold text-navy-dark/50 uppercase tracking-wider">Solo para ti</span>
+                                </div>
+                              )}
+
+                              {/* Prayer text */}
+                              <p className="text-navy-dark/90 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                                {pm.text}
+                              </p>
+
+                              {/* Praying button + count */}
+                              <div className="pt-4 mt-4 border-t border-navy-dark/5 flex flex-col items-center gap-3">
+                                <button
+                                  onClick={() => handleToggleReaction(post.id, "amen")}
+                                  className={`py-2.5 px-5 rounded-full font-sans font-extrabold text-[11px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2.5 shadow-sm border ${
+                                    hasPrayed
+                                      ? "bg-navy-dark/5 text-navy-dark border-navy-dark/15"
+                                      : "bg-gold/8 text-gold border-gold/20 hover:bg-gold hover:text-white hover:border-gold shadow-gold/5"
+                                  }`}
+                                >
+                                  <span className="text-lg leading-none">🙏</span>
+                                  {hasPrayed
+                                    ? (totalPraying === 1 ? "Estás orando" : `Orando (${totalPraying})`)
+                                    : "Orar por esta petición"
+                                  }
+                                </button>
+
+                                {totalPraying > 0 && (
+                                  <p className="text-[11px] text-navy-dark/40 font-sans font-medium">
+                                    {totalPraying === 1 ? "1 persona orando" : `${totalPraying} personas orando`}
+                                    {hasPrayed ? " · incluido tú" : ""}
+                                  </p>
+                                )}
+
+                                {!hasPrayed && (
+                                  <p className="text-[10px] text-navy-dark/30 font-sans italic">
+                                    Haz una oración real donde estés, aunque sea breve. Con fe.
+                                  </p>
+                                )}
+
+                                {/* Reinforcement button — only for the prayer author, only on original requests */}
+                                {isMyPost && !isReinforcement && (
+                                  <button
+                                    onClick={() => handlePrayerReinforcement(post)}
+                                    disabled={isSubmittingReinforcement === post.id}
+                                    className="mt-2 py-2.5 px-5 rounded-full font-sans font-extrabold text-[11px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2 border border-gold/30 bg-gold/10 text-gold hover:bg-gold hover:text-white shadow-sm"
+                                  >
+                                    <Megaphone size={14} className={isSubmittingReinforcement === post.id ? "animate-pulse" : ""} />
+                                    {isSubmittingReinforcement === post.id ? "Enviando..." : "Pedir refuerzo en oración"}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }
+
                         if (post.content.startsWith("🎯 [HABIT_COMPLETE]:")) {
                           let meta = null;
                           try {
@@ -979,8 +1214,8 @@ export default function Comunidad({
                   )}
 
                   {/* Action buttons */}
-                  <div className={`border-t border-gray-100 grid ${post.content.startsWith("🎯 [HABIT_COMPLETE]:") ? "grid-cols-2" : "grid-cols-3"}`}>
-                    {post.content.startsWith("🎯 [HABIT_COMPLETE]:") ? (
+                  <div className={`border-t border-gray-100 grid ${(post.content.startsWith("🎯 [HABIT_COMPLETE]:") || isPrayerPost(post.content)) ? "grid-cols-2" : "grid-cols-3"}`}>
+                    {(post.content.startsWith("🎯 [HABIT_COMPLETE]:") || isPrayerPost(post.content)) ? (
                       <>
                         <Link
                           href={`/post/${post.id}`}

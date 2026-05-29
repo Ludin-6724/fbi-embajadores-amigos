@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PenSquare, UserMinus, Flame, Users, X, Loader2, Globe, Lock } from "lucide-react";
+import { PenSquare, UserMinus, Flame, Users, X, Loader2, Globe, Lock, Fingerprint, Heart } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type DashboardActionsProps = {
@@ -11,12 +11,15 @@ type DashboardActionsProps = {
   hideVisuals?: boolean;
 };
 
+type PrayerVisibility = "public" | "anonymous" | "private";
+
 export default function DashboardActions({ profile, isCommunity = false, hideVisuals = false }: DashboardActionsProps) {
   const [activeModal, setActiveModal] = useState<"post" | "prayer" | "community" | "selector" | null>(null);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [commPrivate, setCommPrivate] = useState(false);
+  const [prayerVisibility, setPrayerVisibility] = useState<PrayerVisibility>("anonymous");
 
   const supabase = createClient();
   const router = useRouter();
@@ -27,6 +30,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     setSubmitting(false);
     setFormError(null);
     setCommPrivate(false);
+    setPrayerVisibility("anonymous");
   };
 
   useEffect(() => {
@@ -66,6 +70,37 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
     } else {
       console.error(error);
       setFormError(`Error al publicar: ${error.message}`);
+      setSubmitting(false);
+    }
+  };
+
+  const handlePrayerSubmit = async () => {
+    if (!content.trim() || !profile) return;
+    setSubmitting(true);
+
+    const authorName = profile.full_name || profile.username || "Agente";
+    const meta = {
+      text: content.trim(),
+      author_name: authorName,
+      is_anonymous: prayerVisibility === "anonymous",
+      is_private: prayerVisibility === "private",
+    };
+
+    const postContent = `🙏 [PRAYER_REQUEST]:${JSON.stringify(meta)}`;
+
+    const { error } = await supabase.from("posts").insert({
+      author_id: profile.id,
+      content: postContent,
+      is_anonymous: prayerVisibility === "anonymous",
+    });
+
+    if (!error) {
+      handleClose();
+      window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
+      router.refresh();
+    } else {
+      console.error(error);
+      setFormError(`Error al publicar petición: ${error.message}`);
       setSubmitting(false);
     }
   };
@@ -149,8 +184,8 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                   onClick={() => setActiveModal("prayer")}
                   className="flex items-center gap-2 px-5 py-3 bg-white border border-light-gray hover:border-gold/30 hover:bg-gold/5 text-navy-dark font-sans font-semibold rounded-full transition-colors shadow-sm text-sm"
                 >
-                  <UserMinus size={18} className="text-gold" />
-                  Oración Anónima
+                  <Heart size={18} className="text-gold" />
+                  Petición de Oración
                 </button>
                 <button 
                   onClick={() => {
@@ -188,7 +223,7 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
               <h3 className="font-serif text-lg sm:text-xl font-bold text-navy-dark">
                 {activeModal === "selector" ? "Selecciona una Acción" : 
                  activeModal === "post" ? "Crear Publicación" : 
-                 activeModal === "prayer" ? "Petición Anónima" : 
+                 activeModal === "prayer" ? "Petición de Oración" : 
                  "Nueva Comunidad"}
               </h3>
               <button onClick={handleClose} className="text-navy-dark/50 hover:text-navy-dark p-1">
@@ -217,11 +252,11 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                     className="flex items-center gap-4 p-5 bg-navy-dark/5 border border-navy-dark/10 rounded-3xl hover:bg-navy-dark/10 transition-all text-left group"
                   >
                     <div className="w-12 h-12 rounded-2xl bg-navy-dark/10 flex items-center justify-center text-navy-dark group-hover:scale-110 transition-transform">
-                      <UserMinus size={24} />
+                      <Heart size={24} />
                     </div>
                     <div>
-                      <h4 className="font-serif font-bold text-navy-dark text-lg">Petición Anónima</h4>
-                      <p className="font-sans text-xs text-navy-dark/60 italic">Oración confidencial para el oratorio</p>
+                      <h4 className="font-serif font-bold text-navy-dark text-lg">Petición de Oración</h4>
+                      <p className="font-sans text-xs text-navy-dark/60 italic">Comparte tu petición y recibe oración de la comunidad</p>
                     </div>
                   </button>
                 </div>
@@ -273,6 +308,79 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                      </div>
                    </div>
                 </div>
+              ) : activeModal === "prayer" ? (
+                <div className="space-y-5">
+                  {/* Visibility selector */}
+                  <div>
+                    <label className="block text-sm font-sans font-bold text-navy-dark mb-3">¿Cómo quieres publicar tu petición?</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPrayerVisibility("public")}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all ${
+                          prayerVisibility === "public" ? "border-gold bg-gold/5" : "border-light-gray hover:border-gold/30"
+                        }`}
+                      >
+                        <Globe size={18} className={prayerVisibility === "public" ? "text-gold" : "text-navy-dark/40"} />
+                        <span className={`font-sans text-[11px] font-bold ${prayerVisibility === "public" ? "text-gold" : "text-navy-dark/60"}`}>Público</span>
+                        <span className="font-sans text-[9px] text-navy-dark/40 text-center leading-tight">Con tu nombre</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrayerVisibility("anonymous")}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all ${
+                          prayerVisibility === "anonymous" ? "border-gold bg-gold/5" : "border-light-gray hover:border-gold/30"
+                        }`}
+                      >
+                        <Fingerprint size={18} className={prayerVisibility === "anonymous" ? "text-gold" : "text-navy-dark/40"} />
+                        <span className={`font-sans text-[11px] font-bold ${prayerVisibility === "anonymous" ? "text-gold" : "text-navy-dark/60"}`}>Anónimo</span>
+                        <span className="font-sans text-[9px] text-navy-dark/40 text-center leading-tight">Sin tu nombre</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrayerVisibility("private")}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all ${
+                          prayerVisibility === "private" ? "border-gold bg-gold/5" : "border-light-gray hover:border-gold/30"
+                        }`}
+                      >
+                        <Lock size={18} className={prayerVisibility === "private" ? "text-gold" : "text-navy-dark/40"} />
+                        <span className={`font-sans text-[11px] font-bold ${prayerVisibility === "private" ? "text-gold" : "text-navy-dark/60"}`}>Privado</span>
+                        <span className="font-sans text-[9px] text-navy-dark/40 text-center leading-tight">Solo para ti</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Prayer text */}
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder={
+                      prayerVisibility === "private"
+                        ? "Escribe tu petición personal. Solo tú la verás..."
+                        : prayerVisibility === "anonymous"
+                        ? "Escribe tu petición. Se publicará sin tu nombre..."
+                        : "Escribe tu petición. Se publicará con tu nombre..."
+                    }
+                    className="w-full min-h-[140px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
+                    required
+                  />
+
+                  {/* Info text */}
+                  <p className="text-[11px] text-navy-dark/40 font-sans italic text-center leading-relaxed">
+                    {prayerVisibility === "private"
+                      ? "Esta petición solo la verás tú en tu sección personal de oración."
+                      : prayerVisibility === "anonymous"
+                      ? "Tu petición aparecerá en la comunidad sin tu nombre. Otros podrán orar por ti."
+                      : "Tu petición aparecerá en la comunidad con tu nombre. Otros podrán orar por ti."
+                    }
+                  </p>
+
+                  {formError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm font-sans text-red-700">
+                      ⚠️ {formError}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-4">
                  <textarea
@@ -280,7 +388,6 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
                   onChange={(e) => setContent(e.target.value)}
                   placeholder={
                     activeModal === "post" ? "¿Qué tienes para compartir hoy agente?" : 
-                    activeModal === "prayer" ? "Escribe tu petición o testimonio de forma completamente anónima..." :
                     "Reporta tu misión completada. Ej: 'Hoy recordé mi identidad en Cristo y oré 15min'."
                   }
                   className="w-full min-h-[180px] p-4 bg-cream/50 rounded-xl border border-light-gray focus:border-gold focus:ring-1 focus:ring-gold outline-none resize-none font-sans text-navy-dark"
@@ -298,12 +405,18 @@ export default function DashboardActions({ profile, isCommunity = false, hideVis
             {activeModal !== "selector" && (
               <div className="p-5 sm:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom,24px))] sm:pb-6 border-t border-light-gray bg-white flex justify-end flex-shrink-0 sm:rounded-b-3xl">
                 <button 
-                  onClick={(e) => activeModal === "community" ? handleCommunitySubmit() : handlePostSubmit(e as any, activeModal === "prayer")}
+                  onClick={(e) => {
+                    if (activeModal === "community") handleCommunitySubmit();
+                    else if (activeModal === "prayer") handlePrayerSubmit();
+                    else handlePostSubmit(e as any, false);
+                  }}
                   disabled={activeModal !== "community" && (submitting || !content.trim())}
                   className="px-8 py-4 w-full sm:w-auto bg-gold hover:opacity-90 disabled:opacity-50 text-white font-sans font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2"
                 >
                   {submitting ? <Loader2 className="animate-spin" size={18} /> : 
-                   activeModal === "community" ? "Fundar Comunidad" : "Publicar Mensaje"}
+                   activeModal === "community" ? "Fundar Comunidad" : 
+                   activeModal === "prayer" ? "Enviar Petición 🙏" :
+                   "Publicar Mensaje"}
                 </button>
               </div>
             )}
