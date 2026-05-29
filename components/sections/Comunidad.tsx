@@ -97,6 +97,7 @@ export default function Comunidad({
   const [isSubmittingReinforcement, setIsSubmittingReinforcement] = useState<string | null>(null);
   const [inlinePrayerVisibility, setInlinePrayerVisibility] = useState<"public" | "anonymous" | "private">("anonymous");
   const [prayerTab, setPrayerTab] = useState<"active" | "answered" | "private">("active");
+  const [activeSubTab, setActiveSubTab] = useState<"general" | "private">("general");
   const [answeredSubTab, setAnsweredSubTab] = useState<"general" | "private">("general");
   const pageSize = 15;
 
@@ -642,6 +643,55 @@ export default function Comunidad({
     }
   };
 
+  const handleUndoMarkAsAnswered = async (post: Post, meta: any) => {
+    if (!userId) { showToast("Inicia sesión", false); return; }
+    try {
+      // 1. Update the original post to active (is_answered: false)
+      const updatedMeta = { ...meta, is_answered: false };
+      const updatedContent = `🙏 [PRAYER_REQUEST]:${JSON.stringify(updatedMeta)}`;
+
+      const { error: updateError } = await sbRef.current
+        .from("posts")
+        .update({ content: updatedContent })
+        .eq("id", post.id);
+
+      if (updateError) throw updateError;
+
+      // 2. If NOT private, find the celebratory post in Muro and delete it
+      if (!meta.is_private) {
+        const { data: celebrationPosts, error: findError } = await sbRef.current
+          .from("posts")
+          .select("id, content")
+          .eq("author_id", userId)
+          .like("content", "🎉 [PRAYER_ANSWERED]%");
+
+        if (!findError && celebrationPosts) {
+          const targetPost = celebrationPosts.find((p: any) => {
+            try {
+              const parsed = JSON.parse(p.content.substring(21));
+              return parsed.original_post_id === post.id;
+            } catch {
+              return false;
+            }
+          });
+
+          if (targetPost) {
+            await sbRef.current
+              .from("posts")
+              .delete()
+              .eq("id", targetPost.id);
+          }
+        }
+      }
+
+      showToast("Petición restaurada a activa.");
+      fetchPosts(0, false);
+      window.dispatchEvent(new CustomEvent("fbi:refresh-feed"));
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, false);
+    }
+  };
+
   // Helper: parse prayer metadata from post content
   const parsePrayerMeta = (content: string): { type: "request" | "reinforcement"; meta: any } | null => {
     if (content.startsWith("🙏 [PRAYER_REQUEST]:")) {
@@ -856,6 +906,32 @@ export default function Comunidad({
                   </button>
                 </div>
 
+                {/* Sub-menu when Activas is active */}
+                {prayerTab === "active" && (
+                  <div className="flex justify-center gap-4 text-[11px] font-bold animate-fade-in mt-1">
+                    <button
+                      onClick={() => setActiveSubTab("general")}
+                      className={`pb-1 border-b-2 transition-all ${
+                        activeSubTab === "general"
+                          ? "border-gold text-navy-dark font-extrabold"
+                          : "border-transparent text-navy-dark/40 hover:text-navy-dark/60"
+                      }`}
+                    >
+                      Generales
+                    </button>
+                    <button
+                      onClick={() => setActiveSubTab("private")}
+                      className={`pb-1 border-b-2 transition-all ${
+                        activeSubTab === "private"
+                          ? "border-gold text-navy-dark font-extrabold"
+                          : "border-transparent text-navy-dark/40 hover:text-navy-dark/60"
+                      }`}
+                    >
+                      Personales
+                    </button>
+                  </div>
+                )}
+
                 {/* Sub-menu when Contestadas is active */}
                 {prayerTab === "answered" && (
                   <div className="flex justify-center gap-4 text-[11px] font-bold animate-fade-in mt-1">
@@ -989,8 +1065,14 @@ export default function Comunidad({
                 const isPrivate = pm?.is_private === true;
 
                 if (prayerTab === "active") {
-                  // Active petitions: public or anonymous, and NOT answered
-                  return !isAnswered && !isPrivate;
+                  // Active petitions: with general/private sub-tabs
+                  if (isAnswered) return false;
+
+                  if (activeSubTab === "general") {
+                    return !isPrivate;
+                  } else {
+                    return isPrivate && userId && post.author_id === userId;
+                  }
                 } else if (prayerTab === "answered") {
                   // Answered petitions
                   if (!isAnswered) return false;
@@ -1008,9 +1090,9 @@ export default function Comunidad({
                 }
                 return false;
               } else {
-                // Muro tab: Show everything EXCEPT private prayers from other users, and old anonymous posts that are NOT prayer requests
+                // Muro tab: Show everything EXCEPT private prayers (which are hidden completely for everyone)
                 if (prayer) {
-                  if (prayer.meta?.is_private && (!userId || post.author_id !== userId)) return false;
+                  if (prayer.meta?.is_private) return false;
                   return true; // Show prayer posts in the muro too
                 }
                 // Regular post: skip anonymous ones (legacy oratorio posts)
@@ -1221,7 +1303,7 @@ export default function Comunidad({
                                   </>
                                 )}
 
-                                {/* Actions for author: Reinforcement + Mark as Answered */}
+                                {/* Actions for author: Reinforcement + Mark as Answered / Undo */}
                                 {isMyPost && (
                                   <div className="flex flex-col sm:flex-row gap-2 w-full justify-center mt-2">
                                     {/* Reinforcement button — only for active requests */}
@@ -1236,13 +1318,23 @@ export default function Comunidad({
                                       </button>
                                     )}
 
-                                    {/* Mark as answered button — only for active requests */}
-                                    {!pm.is_answered && (
+                                    {/* Mark as answered button — only for active public/anonymous requests */}
+                                    {!pm.is_answered && !pm.is_private && (
                                       <button
                                         onClick={() => handleMarkAsAnswered(post, pm)}
                                         className="py-2 px-4 rounded-full font-sans font-extrabold text-[10px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-500 hover:text-white hover:border-amber-500 shadow-sm flex-1"
                                       >
                                         <span>🎉</span> ¡Contestada!
+                                      </button>
+                                    )}
+
+                                    {/* Undo marked as answered button — only for answered public/anonymous requests */}
+                                    {pm.is_answered && !pm.is_private && (
+                                      <button
+                                        onClick={() => handleUndoMarkAsAnswered(post, pm)}
+                                        className="py-2 px-4 rounded-full font-sans font-extrabold text-[10px] uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border border-red-300 bg-red-50 text-red-700 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm flex-1"
+                                      >
+                                        <span>↩️</span> Desmarcar Contestada
                                       </button>
                                     )}
                                   </div>
