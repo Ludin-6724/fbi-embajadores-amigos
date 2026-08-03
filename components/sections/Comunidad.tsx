@@ -29,6 +29,29 @@ const POST_SELECT = "id, author_id, content, is_anonymous, community_id, created
 
 const EMPTY_INITIAL_POSTS: Post[] = [];
 
+/** Posts de oración (petición, refuerzo o contestada). Usado en query y realtime. */
+function isPrayerContent(content: string): boolean {
+  return (
+    content.includes("[PRAYER_REQUEST]") ||
+    content.includes("[PRAYER_REINFORCEMENT]") ||
+    content.includes("[PRAYER_ANSWERED]")
+  );
+}
+
+/** Filtro PostgREST: solo filas de oración (evita páginas vacías en el oratorio). */
+const PRAYER_CONTENT_OR =
+  "content.like.%[PRAYER_REQUEST]%," +
+  "content.like.%[PRAYER_REINFORCEMENT]%," +
+  "content.like.%[PRAYER_ANSWERED]%";
+
+/** Clave de caché por pestaña. v2 oratorio: solo peticiones (antes se cacheaban posts del muro). */
+function postsCacheKey(tab: "muro" | "oratorio", communityId?: string | null) {
+  const scope = communityId || "global";
+  return tab === "oratorio"
+    ? `posts_oratorio_v2_${scope}`
+    : `posts_muro_${scope}`;
+}
+
 function getThreadDescendants(rootId: string, allComments: CommentPreview[]): CommentPreview[] {
   const result: CommentPreview[] = [];
   const mapByParent = new Map<string, CommentPreview[]>();
@@ -209,11 +232,14 @@ export default function Comunidad({
       } else if (authorId) {
         q = q.eq("author_id", authorId).neq("is_anonymous", true);
       } else {
-        // Oratorio tab: show only prayer posts
-        // Muro tab: show everything except prayer-only anonymous posts
+        // Oratorio: traer SOLO peticiones de oración desde la BD (si no, la 1ª página
+        // suele ser solo posts del muro y la UI queda vacía hasta "Cargar más").
+        // Muro: todos los posts públicos de la comunidad/global.
         if (communityId) q = q.eq("community_id", communityId);
         else q = q.is("community_id", null);
-        // No filter by is_anonymous anymore — we filter client-side for prayer vs regular posts
+        if (activeTab === "oratorio") {
+          q = q.or(PRAYER_CONTENT_OR);
+        }
       }
 
       const { data, error: qError } = await q as { data: any; error: any };
@@ -230,15 +256,19 @@ export default function Comunidad({
         post_reactions: p.post_reactions ?? [],
       }));
 
-      if (fetched.length < pageSize) setHasMore(false);
+      // En refresh (no append) restablecer hasMore según esta página
+      if (!append) setHasMore(fetched.length >= pageSize);
+      else if (fetched.length < pageSize) setHasMore(false);
       
       if (append) setPosts(prev => {
         const next = [...prev, ...fetched];
-        if (!postId && pageNum === 0) cache.set(`posts_${activeTab}_${communityId || 'global'}`, next.slice(0, 50));
+        if (!postId && pageNum === 0) {
+          cache.set(postsCacheKey(activeTab, communityId), next.slice(0, 50));
+        }
         return next;
       });
-      else setPosts(prev => {
-        if (!postId) cache.set(`posts_${activeTab}_${communityId || 'global'}`, fetched.slice(0, 50));
+      else setPosts(() => {
+        if (!postId) cache.set(postsCacheKey(activeTab, communityId), fetched.slice(0, 50));
         return fetched;
       });
       
@@ -276,8 +306,12 @@ export default function Comunidad({
         },
         async (payload: { new: any }) => {
           const newPost = payload.new as any;
-          
-          // Always add the post — client-side filtering handles tab separation
+
+          // En oratorio solo encolar posts de oración (evita contaminar la lista)
+          if (activeTab === "oratorio" && !isPrayerContent(newPost.content || "")) {
+            return;
+          }
+
           // Fetch the profile for the new post to show name/avatar
           const { data: profile } = await supabase
             .from('profiles')
@@ -295,7 +329,7 @@ export default function Comunidad({
             if (prev.find(p => p.id === postWithProfile.id)) return prev;
             const next = [postWithProfile, ...prev];
             // Update cache with the new post
-            if (!postId) cache.set(`posts_${activeTab}_${communityId || 'global'}`, next.slice(0, 50));
+            if (!postId) cache.set(postsCacheKey(activeTab, communityId), next.slice(0, 50));
             return next;
           });
         }
@@ -322,7 +356,7 @@ export default function Comunidad({
 
   useEffect(() => {
     const onRefresh = () => {
-      cache.remove(`posts_${activeTab}_${communityId || "global"}`);
+      cache.remove(postsCacheKey(activeTab, communityId));
       void fetchPosts(0, false);
     };
     window.addEventListener("fbi:refresh-feed", onRefresh);
@@ -343,13 +377,18 @@ export default function Comunidad({
 
     let usedCache = false;
 
-    // 1. Primacía de initialPosts (servidor)
-    if (initialPosts.length > 0 && !postId && !hasFetched.current) {
+    // 1. Primacía de initialPosts (servidor) — solo en Muro (SSR no trae oraciones)
+    if (
+      activeTab === "muro" &&
+      initialPosts.length > 0 &&
+      !postId &&
+      !hasFetched.current
+    ) {
       setPosts(initialPosts);
       setLoading(false);
       hasFetched.current = true;
       bootstrapDoneRef.current = ctx;
-      cache.set(`posts_${activeTab}_${communityId || "global"}`, initialPosts);
+      cache.set(postsCacheKey(activeTab, communityId), initialPosts);
       fetchCommentsForPosts(initialPosts.map((p) => p.id));
       void fetchPosts(0, false, { silent: true });
       return;
@@ -357,11 +396,18 @@ export default function Comunidad({
 
     // 2. Caché local (incluye datos stale vía peekStale)
     if (!hasFetched.current && !postId) {
-      const { data: cachedPosts } = cache.peekStale<Post[]>(`posts_${activeTab}_${communityId || "global"}`);
+      const { data: cachedPosts } = cache.peekStale<Post[]>(postsCacheKey(activeTab, communityId));
       if (cachedPosts && cachedPosts.length > 0) {
-        setPosts(cachedPosts);
-        setLoading(false);
-        usedCache = true;
+        // Oratorio: no reutilizar caché mezclada con posts del muro
+        const usable =
+          activeTab === "oratorio"
+            ? cachedPosts.filter((p) => isPrayerContent(p.content))
+            : cachedPosts;
+        if (usable.length > 0) {
+          setPosts(usable);
+          setLoading(false);
+          usedCache = true;
+        }
       }
     }
 
@@ -692,26 +738,80 @@ export default function Comunidad({
     }
   };
 
-  // Helper: parse prayer metadata from post content
+  // Helper: parse prayer metadata from post content (tolerante a variaciones de prefijo)
   const parsePrayerMeta = (content: string): { type: "request" | "reinforcement"; meta: any } | null => {
-    if (content.startsWith("🙏 [PRAYER_REQUEST]:")) {
-      try { return { type: "request", meta: JSON.parse(content.substring(20)) }; } catch { return null; }
+    const reqIdx = content.indexOf("[PRAYER_REQUEST]:");
+    if (reqIdx !== -1) {
+      try {
+        return { type: "request", meta: JSON.parse(content.slice(reqIdx + "[PRAYER_REQUEST]:".length)) };
+      } catch {
+        return null;
+      }
     }
-    if (content.startsWith("🆘 [PRAYER_REINFORCEMENT]:")) {
-      try { return { type: "reinforcement", meta: JSON.parse(content.substring(26)) }; } catch { return null; }
+    const reinfIdx = content.indexOf("[PRAYER_REINFORCEMENT]:");
+    if (reinfIdx !== -1) {
+      try {
+        return {
+          type: "reinforcement",
+          meta: JSON.parse(content.slice(reinfIdx + "[PRAYER_REINFORCEMENT]:".length)),
+        };
+      } catch {
+        return null;
+      }
     }
     return null;
   };
 
   // Helper: parse answered prayer metadata
   const parseAnsweredPrayerMeta = (content: string): { text: string; author_name: string; is_anonymous: boolean; original_post_id?: string } | null => {
-    if (content.startsWith("🎉 [PRAYER_ANSWERED]:")) {
-      try { return JSON.parse(content.substring(21)); } catch { return null; }
+    const idx = content.indexOf("[PRAYER_ANSWERED]:");
+    if (idx === -1) return null;
+    try {
+      return JSON.parse(content.slice(idx + "[PRAYER_ANSWERED]:".length));
+    } catch {
+      return null;
     }
-    return null;
   };
 
-  const isPrayerPost = (content: string) => content.startsWith("🙏 [PRAYER_REQUEST]:") || content.startsWith("🆘 [PRAYER_REINFORCEMENT]:");
+  const isPrayerPost = (content: string) =>
+    content.includes("[PRAYER_REQUEST]") || content.includes("[PRAYER_REINFORCEMENT]");
+
+  /** Lista ya filtrada para la pestaña/sub-pestaña actual (oratorio vs muro). */
+  const visiblePosts = useMemo(() => {
+    return posts.filter((post) => {
+      const prayer = parsePrayerMeta(post.content);
+      if (activeTab === "oratorio") {
+        if (!prayer) return false;
+
+        const pm = prayer.meta;
+        const isAnswered = pm?.is_answered === true;
+        const isPrivate = pm?.is_private === true;
+
+        if (prayerTab === "active") {
+          if (isAnswered) return false;
+          if (activeSubTab === "general") return !isPrivate;
+          return Boolean(userId && post.author_id === userId);
+        }
+        if (prayerTab === "answered") {
+          if (!isAnswered) return false;
+          if (answeredSubTab === "general") return !isPrivate;
+          return Boolean(userId && post.author_id === userId);
+        }
+        if (prayerTab === "private") {
+          return isPrivate && Boolean(userId && post.author_id === userId);
+        }
+        return false;
+      }
+
+      // Muro
+      if (prayer) {
+        if (prayer.meta?.is_private) return false;
+        return true;
+      }
+      if (post.is_anonymous) return false;
+      return true;
+    });
+  }, [posts, activeTab, prayerTab, activeSubTab, answeredSubTab, userId]);
 
   const handleEditComment = async (cId: string, pId: string) => {
     if (!editContent.trim()) return;
@@ -1053,54 +1153,8 @@ export default function Comunidad({
               </div>
             )}
 
-            {/* Posts — Client-side filtering */}
-            {posts.filter(post => {
-              const prayer = parsePrayerMeta(post.content);
-              if (activeTab === "oratorio") {
-                // Oración tab: Only show prayer posts
-                if (!prayer) return false;
-
-                const pm = prayer.meta;
-                const isAnswered = pm?.is_answered === true;
-                const isPrivate = pm?.is_private === true;
-
-                if (prayerTab === "active") {
-                  // Active petitions: with general/personales sub-tabs
-                  if (isAnswered) return false;
-
-                  if (activeSubTab === "general") {
-                    return !isPrivate;
-                  } else {
-                    // Personales: all active petitions created by the user (whether public, anonymous, or private)
-                    return userId && post.author_id === userId;
-                  }
-                } else if (prayerTab === "answered") {
-                  // Answered petitions: with general/personales sub-tabs
-                  if (!isAnswered) return false;
-
-                  if (answeredSubTab === "general") {
-                    // Public or anonymous answered
-                    return !isPrivate;
-                  } else {
-                    // Personales: all answered petitions created by the user (whether public, anonymous, or private)
-                    return userId && post.author_id === userId;
-                  }
-                } else if (prayerTab === "private") {
-                  // Private petitions: both active and answered, but only for the author
-                  return isPrivate && userId && post.author_id === userId;
-                }
-                return false;
-              } else {
-                // Muro tab: Show everything EXCEPT private prayers (which are hidden completely for everyone)
-                if (prayer) {
-                  if (prayer.meta?.is_private) return false;
-                  return true; // Show prayer posts in the muro too
-                }
-                // Regular post: skip anonymous ones (legacy oratorio posts)
-                if (post.is_anonymous) return false;
-                return true;
-              }
-            }).map(post => {
+            {/* Posts — filtrados (BD ya limita a oraciones en oratorio; aquí sub-pestañas) */}
+            {visiblePosts.map(post => {
               const name = post.is_anonymous ? "Agente Anónimo" : (post.profiles?.full_name || post.profiles?.username || "Agente");
               const myR = post.post_reactions.find(r => r.user_id === userId)?.reaction;
               const totalReactions = post.post_reactions.length;
@@ -1803,21 +1857,27 @@ export default function Comunidad({
               );
             })}
 
-            {/* Load more */}
+            {/* Load more — basarse en posts crudos de la página (paginación de BD), no en filtro UI */}
             {hasMore && !loading && posts.length > 0 && (
               <button
                 onClick={loadMore}
                 className="w-full py-4 text-xs font-bold text-gold uppercase tracking-widest hover:text-navy-dark transition-colors"
               >
-                Cargar más publicaciones
+                {activeTab === "oratorio" ? "Cargar más peticiones" : "Cargar más publicaciones"}
               </button>
             )}
 
-            {posts.length === 0 && !loading && (
+            {visiblePosts.length === 0 && !loading && (
               <div className="text-center py-16 text-navy-dark/40">
-                <p className="text-4xl mb-3">✨</p>
-                <p className="font-bold text-sm">Sin publicaciones aún.</p>
-                <p className="text-xs mt-1">¡Sé el primero en compartir!</p>
+                <p className="text-4xl mb-3">{activeTab === "oratorio" ? "🙏" : "✨"}</p>
+                <p className="font-bold text-sm">
+                  {activeTab === "oratorio" ? "Sin peticiones en esta vista." : "Sin publicaciones aún."}
+                </p>
+                <p className="text-xs mt-1">
+                  {activeTab === "oratorio"
+                    ? "Crea una petición o prueba otra pestaña (Activas / Contestadas / Privadas)."
+                    : "¡Sé el primero en compartir!"}
+                </p>
               </div>
             )}
           </div>
